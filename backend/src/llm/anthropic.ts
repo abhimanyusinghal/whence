@@ -19,6 +19,8 @@ import { dropUnknownNodes } from "./validation.js";
 export class AnthropicProvider implements LlmProvider {
   readonly name = "anthropic";
   readonly modelLabel: string;
+  readonly extractModelLabel: string;
+  readonly classifyModelLabel: string;
   private client: Anthropic;
   private model: string;
 
@@ -26,6 +28,8 @@ export class AnthropicProvider implements LlmProvider {
     this.client = new Anthropic({ apiKey: opts.apiKey });
     this.model = opts.model ?? "claude-sonnet-4-6";
     this.modelLabel = this.model;
+    this.extractModelLabel = `anthropic:${this.model}`;
+    this.classifyModelLabel = `anthropic:${this.model}`;
   }
 
   async extractClaims(input: AnalyzeRequest): Promise<ExtractClaimsResult> {

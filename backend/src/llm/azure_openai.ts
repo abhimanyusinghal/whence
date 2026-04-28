@@ -26,6 +26,8 @@ import { dropUnknownNodes } from "./validation.js";
 export class AzureOpenAiProvider implements LlmProvider {
   readonly name = "azure_openai";
   readonly modelLabel: string;
+  readonly extractModelLabel: string;
+  readonly classifyModelLabel: string;
   private extractClient: AzureOpenAI;
   private classifyClient: AzureOpenAI;
   private extractDeployment: string;
@@ -57,6 +59,8 @@ export class AzureOpenAiProvider implements LlmProvider {
       this.extractDeployment === this.classifyDeployment
         ? `azure:${this.extractDeployment}`
         : `azure:extract=${this.extractDeployment},classify=${this.classifyDeployment}`;
+    this.extractModelLabel = `azure:${this.extractDeployment}`;
+    this.classifyModelLabel = `azure:${this.classifyDeployment}`;
   }
 
   async extractClaims(input: AnalyzeRequest): Promise<ExtractClaimsResult> {
