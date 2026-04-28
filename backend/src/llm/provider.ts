@@ -23,6 +23,8 @@ export type ClassifyChainResult = {
 export interface LlmProvider {
   readonly name: string;
   readonly modelLabel: string;
+  readonly extractModelLabel: string;
+  readonly classifyModelLabel: string;
   extractClaims(input: AnalyzeRequest): Promise<ExtractClaimsResult>;
   classifyChain(input: ClassifyChainInput): Promise<ClassifyChainResult>;
 }

@@ -9,7 +9,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import { analyze } from "./orchestrator.js";
 import { analyzeCache, analyzeCacheKey } from "./cache.js";
-import type { AnalyzeRequest, AnalyzeResponse } from "./types.js";
+import { logEntry, makeRequestId } from "./logger.js";
+import type { AnalyzeRequest } from "./types.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -24,6 +25,7 @@ app.use(
       if (origin.startsWith("http://127.0.0.1")) return cb(null, true);
       return cb(null, false);
     },
+    exposedHeaders: ["X-Request-Id", "X-Cache"],
   }),
 );
 app.use(express.json({ limit: "2mb" }));
@@ -57,21 +59,33 @@ function validateRequest(body: unknown): AnalyzeRequest | string {
   };
 }
 
+function statusCounts(chains: { status: string }[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const c of chains) counts[c.status] = (counts[c.status] ?? 0) + 1;
+  return counts;
+}
+
 app.post(
   "/analyze",
   async (req: Request, res: Response, next: NextFunction) => {
+    const requestId = makeRequestId();
+    res.setHeader("X-Request-Id", requestId);
+
     try {
+      const t0 = Date.now();
       const validated = validateRequest(req.body);
       if (typeof validated === "string") {
-        res.status(400).json({ error: "invalid_request", message: validated });
+        res.status(400).json({ error: "invalid_request", message: validated, request_id: requestId });
         return;
       }
 
       const tavilyKey = process.env.TAVILY_API_KEY;
       if (!tavilyKey) {
-        res
-          .status(500)
-          .json({ error: "missing_config", message: "TAVILY_API_KEY not set on server" });
+        res.status(500).json({
+          error: "missing_config",
+          message: "TAVILY_API_KEY not set on server",
+          request_id: requestId,
+        });
         return;
       }
 
@@ -79,21 +93,66 @@ app.post(
       const cached = analyzeCache.get(cacheKey);
       if (cached) {
         res.setHeader("X-Cache", "hit");
+        logEntry({
+          type: "request",
+          ts: new Date().toISOString(),
+          request_id: requestId,
+          url: validated.url,
+          title: validated.title,
+          page_text_len: validated.page_text.length,
+          page_links_count: validated.page_links.length,
+          cache_hit: true,
+          claim_count: cached.claims.length,
+          total_ms: Date.now() - t0,
+          total_tokens: 0,
+          search_queries: 0,
+          status_counts: statusCounts(cached.chains),
+          error: null,
+        });
         res.json(cached);
         return;
       }
 
-      console.log(
-        `[/analyze] url=${validated.url.slice(0, 80)} text=${validated.page_text.length}c links=${validated.page_links.length}`,
-      );
-      const result: AnalyzeResponse = await analyze(validated, { tavilyKey });
+      const result = await analyze(validated, { tavilyKey, requestId });
       analyzeCache.set(cacheKey, result);
-      console.log(
-        `[/analyze] done — claims=${result.claims.length} ms=${result.meta.ms} tokens=${result.meta.tokens_used} searches=${result.meta.search_queries}`,
-      );
       res.setHeader("X-Cache", "miss");
+
+      logEntry({
+        type: "request",
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        url: validated.url,
+        title: validated.title,
+        page_text_len: validated.page_text.length,
+        page_links_count: validated.page_links.length,
+        cache_hit: false,
+        claim_count: result.claims.length,
+        total_ms: result.meta.ms,
+        total_tokens: result.meta.tokens_used,
+        search_queries: result.meta.search_queries,
+        status_counts: statusCounts(result.chains),
+        error: null,
+      });
+
       res.json(result);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logEntry({
+        type: "request",
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        url: (req.body as { url?: string })?.url ?? "",
+        title: (req.body as { title?: string })?.title ?? "",
+        page_text_len: 0,
+        page_links_count: 0,
+        cache_hit: false,
+        claim_count: 0,
+        total_ms: 0,
+        total_tokens: 0,
+        search_queries: 0,
+        status_counts: {},
+        error: msg.slice(0, 500),
+      });
       next(err);
     }
   },

@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
+import { appendChainRecord } from "./chain_log.js";
 import { createProvider, type LlmProvider } from "./llm/index.js";
+import { logEntry, makeRequestId } from "./logger.js";
 import { publisherFromUrl, tavilySearch, withInlineLink } from "./search.js";
 import type {
   AnalyzeMeta,
@@ -49,12 +51,16 @@ async function pLimit<T, R>(
 export type AnalyzeOptions = {
   provider?: LlmProvider;
   tavilyKey: string;
+  requestId?: string;
 };
+
+export type AnalyzeOutput = AnalyzeResponse & { request_id: string };
 
 export async function analyze(
   input: AnalyzeRequest,
   opts: AnalyzeOptions,
-): Promise<AnalyzeResponse> {
+): Promise<AnalyzeOutput> {
+  const requestId = opts.requestId ?? makeRequestId();
   const t0 = Date.now();
   const provider = opts.provider ?? createProvider();
 
@@ -74,19 +80,26 @@ export async function analyze(
     inline_link: c.inline_link ?? undefined,
   }));
 
-  // Phase 2 — per-claim Tavily + classify, parallelized.
+  // Phase 2 — per-claim Tavily + classify, parallelized + logged per claim.
   const articlePublisher = publisherFromUrl(input.url);
-  let searchQueries = 0;
   let totalIn = extract.usage.input_tokens;
   let totalOut = extract.usage.output_tokens;
+  let searchQueries = 0;
 
   const chains = await pLimit(claims, CLAIM_CONCURRENCY, async (claim) => {
+    const claimT0 = Date.now();
+    let searchCount = 0;
+    let fallbackUsed = false;
+    let claimError: string | null = null;
+    let chain: ProvenanceChain;
+
     try {
       const rawCandidates = await tavilySearch({
         apiKey: opts.tavilyKey,
         query: claim.normalized,
         maxResults: 8,
       });
+      searchCount = 1;
       searchQueries++;
       const candidates = withInlineLink(rawCandidates, claim.inline_link ?? null);
 
@@ -99,18 +112,52 @@ export async function analyze(
       });
       totalIn += result.usage.input_tokens;
       totalOut += result.usage.output_tokens;
-      return { ...result.chain, claim_id: claim.id } satisfies ProvenanceChain;
+      chain = { ...result.chain, claim_id: claim.id } satisfies ProvenanceChain;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[orchestrator] claim ${claim.id} failed:`, msg);
-      return {
+      claimError = err instanceof Error ? err.message : String(err);
+      chain = {
         claim_id: claim.id,
-        status: "untraceable" as const,
+        status: "untraceable",
         hop_count: -1,
         nodes: [],
-        notes: `Classification failed: ${msg.slice(0, 200)}`,
+        notes: `Classification failed: ${claimError.slice(0, 200)}`,
       };
     }
+
+    const ts = new Date().toISOString();
+    const claimMs = Date.now() - claimT0;
+
+    logEntry({
+      type: "claim",
+      ts,
+      request_id: requestId,
+      claim_id: claim.id,
+      claim_category: claim.category,
+      importance: claim.importance,
+      model: provider.classifyModelLabel,
+      search_count: searchCount,
+      ms: claimMs,
+      status: chain.status,
+      hop_count: chain.hop_count,
+      fallback_used: fallbackUsed,
+      error: claimError,
+    });
+
+    await appendChainRecord({
+      ts,
+      request_id: requestId,
+      url: input.url,
+      title: input.title,
+      claim,
+      chain,
+      model: provider.classifyModelLabel,
+      search_count: searchCount,
+      ms: claimMs,
+      fallback_used: fallbackUsed,
+      error: claimError,
+    });
+
+    return chain;
   });
 
   const meta: AnalyzeMeta = {
@@ -119,5 +166,5 @@ export async function analyze(
     ms: Date.now() - t0,
   };
 
-  return { claims, chains, meta };
+  return { claims, chains, meta, request_id: requestId };
 }

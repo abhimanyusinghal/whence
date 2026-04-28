@@ -6,9 +6,11 @@ This product traces claims in articles back to their primary sources. It does no
 
 Six chain states: `primary`, `direct_cited`, `indirect_cited`, `stale_cited`, `circular`, `untraceable`.
 
+The strategy: hold the no-verdict line. The engine sells because it shows where claims actually come from, not because it picks fights about truth. Don't let any customer talk us into a true/false toggle.
+
 ---
 
-## Today (Phase 0)
+## Phase 0 — Today
 
 ### Backend
 
@@ -27,7 +29,7 @@ Six chain states: `primary`, `direct_cited`, `indirect_cited`, `stale_cited`, `c
 - [x] LRU cache (50 entries)
 - [x] `X-Cache: hit/miss` response header
 - [x] CORS for `chrome-extension://*` origins
-- [x] Per-claim error isolation
+- [x] Per-claim error isolation (production-tested on a real Azure 500)
 - [x] Aggregated meta (tokens, searches, ms)
 - [x] Anthropic prompt caching on system prompt
 - [x] Azure OpenAI Responses API (supports gpt-5.4 family)
@@ -52,67 +54,83 @@ Six chain states: `primary`, `direct_cited`, `indirect_cited`, `stale_cited`, `c
 
 ### Tests + CLIs
 
-- [x] Synthetic article 1 (clean primary cites)
+- [x] Synthetic article 1 (clean primary cites) — `direct_cited` / `indirect_cited` chains
+- [x] Synthetic article 2 (stale/distorted cites) — 6/6 distortions detected as `stale_cited`
+- [x] Synthetic article 3 (fully untraceable) — 8/8 fabricated sources detected as `untraceable`
 - [x] `npm run extract` CLI
 - [x] `npm run classify` CLI
 - [x] `npm run analyze` CLI
-- [ ] Synthetic article 2 (stale/distorted cites)
-- [ ] Synthetic article 3 (fully untraceable)
 
 ---
 
-## Phase 1 — Finish v1
+## Phase 1
 
-- [ ] Settings page (options.html)
-- [ ] BYOK flow via `chrome.storage.sync`
-- [ ] Configurable backend URL, provider, deployments, concurrency
+- [x] Structured logs per `/analyze` call: claim_id, model, search_count, ms, status, fallback_used, error
+- [x] Append every chain to a JSONL log file (later becomes the graph database)
+- [ ] Real-article eval set: 20 hand-annotated articles with expected chain status per claim
+- [ ] Eval harness that runs the set, scores precision/recall on status classification, surfaces regressions
 - [ ] Year-match rule in `classify_chain.md`
 - [ ] Author-surname-match rule in `classify_chain.md`
-- [ ] Real-article eval set (20 hand-annotated articles)
-- [ ] README with setup + env + taxonomy
+- [ ] Tie-break heuristic for "wrong primary among plausible candidates": prefer official > peer-reviewed > government > major outlet > blog. Log when ties occur.
+- [ ] "False untraceable" fallback: Tavily `include_raw_content: true` retry before declaring untraceable
+- [ ] API key auth on `/analyze` (simple bearer tokens, in-memory or sqlite)
+- [ ] Rate limiting per key
+- [ ] Usage metering per key (count + token estimate, for billing)
+- [ ] `/v1/analyze` versioned endpoint with stable JSON contract
+- [ ] OpenAPI spec
+- [ ] One-page API documentation (curl examples, response schema, six states explained)
+- [ ] Host on Azure
+- [ ] Bound default keys + BYOK override (BYOK for the extension; hosted keys for paying API customers)
 
-## Phase 2 — Publishable
 
-- [ ] Hosted backend (Hono on Cloudflare Workers)
-- [ ] Bound default keys + BYOK override
-- [ ] Chrome Web Store listing + privacy policy
-- [ ] `include_raw_content: true` Tavily fallback for untraceable retries
-- [ ] Static domain reputation table (~200 primaries / 200 low-cred)
-- [ ] Re-analyze button in side panel
+---
 
-## Phase 3 — Defensible
+## Phase 2
 
-- [ ] Server-side provenance cache database
-- [ ] Provenance Score per publisher
-- [ ] Public API for journalists/researchers
-- [ ] LinkedIn / X URL-paste mode
-- [ ] Bulk analysis CLI
+- [ ] Bulk analysis CLI (newsrooms want batch over watchlists)
+- [ ] CSV / JSON export of chains for editorial review
+- [ ] Per-author or per-domain "provenance fingerprint" — does this writer typically cite primaries
+- [ ] Webhook on completion (long-running batch jobs)
+- [ ] CMS plugin (WordPress first; Substack / Ghost / Medium are downstream of WordPress)
 
-## Phase 4 — Adjacent surfaces (pick one)
 
-- [ ] Real-time scroll mode
+- [ ] One published case study: pick a viral LinkedIn post or news cycle, run the engine over it, publish the chain breakdown. This is the marketing.
+- [ ] Chrome Web Store listing (extension stays free — it's the funnel, not the revenue)
+
+---
+
+## Phase 3
+
+- [ ] Move JSONL logs to Postgres or D1 — every claim, every chain, every node, every search query
+- [ ] Public-by-default cache: anonymous users contribute to the graph, see other people's verified chains
+- [ ] Provenance Score per publisher (now meaningful because the graph has volume)
+- [ ] De-dup claims across articles (same statistic, different sources → graph nodes converge)
+
+- [ ] Publisher provenance dataset (CSV / API) for media-monitoring buyers, insurance, ratings
+- [ ] AI grounding API: structured claim → primary-source pairs for LLM developers (Anthropic, Perplexity, You.com — they all need this)
+
+
+- [ ] Compliance / KYC, OR academic libraries, OR PR / comms
+- [ ] Vertical pricing page, vertical case study, one named pilot
+
+---
+
+## Phase 4 — Scale (month 4+)
+
+- [ ] LinkedIn / X URL-paste mode (URL-only, no DOM scraping)
+- [ ] Latency optimization (parallelize Tavily within claims, prompt-caching gains, smaller model for extract)
 - [ ] Firefox port
-- [ ] Edge port
-- [ ] Safari (Mac + iOS)
-- [ ] Slack / Notion plugin
+- [ ] Slack / Notion plugin (only if a paying customer asks)
+- [ ] Multi-language support (driven by customer geography)
 
----
-
-## Cut from scope
-
-- [ ] User accounts / sharing / history
-- [ ] Image / video / audio provenance
-- [ ] LinkedIn / Twitter DOM scraping
-- [ ] User-facing true/false verdict
-- [ ] Real-time as-you-type analysis
-- [ ] Multi-user / team features
-
----
 
 ## Known limitations (today)
 
-- [ ] Model picks wrong primary when multiple plausible candidates exist
-- [ ] `untraceable` returned when snippet doesn't quote claim's figure verbatim
-- [ ] Latency 30–40s for 9-claim articles (spec budget was 25s)
-- [ ] No telemetry on which prompts/models produce best chains
-- [ ] Inline highlights silently skipped when DOM matcher fails
+- [ ] Model picks wrong primary when multiple plausible candidates exist (Phase 1: tie-break heuristic)
+- [ ] `untraceable` returned when snippet doesn't quote claim's figure verbatim (Phase 1: raw-content retry)
+- [ ] Latency 30–40s for 9-claim articles (spec budget was 25s; defer until customer raises it)
+- [ ] No telemetry on which prompts/models produce best chains (Phase 1: structured logs + eval harness)
+- [ ] Inline highlights silently skipped when DOM matcher fails (low-pri; UI-only)
+- [ ] Extract occasionally duplicates a claim with slightly different wording (Phase 1: prompt tightening)
+
+---
