@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "target_count": 20,
+  "description": "Hand-annotated eval set for chain classification regression testing. Seeded with the three synthetic fixtures (we control ground truth there); real articles to be added one at a time.",
+  "schema_notes": "Each entry pins the verbatim claim text expected to be extracted, plus the ideal chain status. The harness (next roadmap item) extracts claims, matches each to the nearest pinned claim by text similarity, runs classify_chain, and scores per-claim status against expected_status (or any value in acceptable_statuses). known_issue=true marks claims where current behavior is wrong but locked in for regression-prevention purposes.",
+  "entries": [
+    {
+      "id": "synthetic-001-wfh",
+      "source": "synthetic",
+      "fixture": "article1.html",
+      "url": "synthetic://wfh-four-years",
+      "title": "What Four Years of Remote-Work Data Actually Tell Us",
+      "added_date": "2026-04-28",
+      "annotator": "design",
+      "notes": "Clean-cite case. Planted real inline links to Stanford/BLS/Microsoft/CNBC. The Bloom 4.4% case is the known wrong-primary issue (model picks Nature 2024 instead of NBER w30292).",
+      "claims": [
+        {
+          "text": "The most cited piece of evidence is a 2022 study by Stanford economist Nicholas Bloom and colleagues, which found that hybrid work arrangements increased worker productivity by 4.4 percent compared to fully in-office controls.",
+          "category": "study_reference",
+          "importance": 1,
+          "inline_link": "https://nbloom.people.stanford.edu/",
+          "expected_status": "indirect_cited",
+          "acceptable_statuses": ["indirect_cited", "direct_cited"],
+          "expected_primary_url": "https://www.nber.org/system/files/working_papers/w30292/w30292.pdf",
+          "known_issue": true,
+          "notes": "Model currently picks Nature 2024 retention paper as primary instead of NBER w30292. Tracked as 'wrong primary among plausible candidates' in roadmap."
+        },
+        {
+          "text": "The study followed 1,612 engineers, marketing staff, and finance employees at a large Chinese travel company over six months and is widely considered the largest randomized trial of hybrid work to date.",
+          "category": "study_reference",
+          "importance": 2,
+          "inline_link": "https://nbloom.people.stanford.edu/",
+          "expected_status": "indirect_cited",
+          "acceptable_statuses": ["indirect_cited", "direct_cited"],
+          "expected_primary_url": "https://www.nber.org/system/files/working_papers/w30292/w30292.pdf",
+          "notes": "Same study as preceding claim; expects same primary."
+        },
+        {
+          "text": "According to the U.S. Bureau of Labor Statistics, 27 percent of U.S. employees worked from home at least one day per week in 2023, more than five times the pre-pandemic share.",
+          "category": "statistic",
+          "importance": 1,
+          "inline_link": "https://www.bls.gov/news.release/atus.t05.htm",
+          "expected_status": "direct_cited",
+          "acceptable_statuses": ["direct_cited", "stale_cited"],
+          "expected_primary_url": "https://www.bls.gov/news.release/atus.t05.htm",
+          "notes": "BLS is itself the primary source. Article links directly. Should be direct_cited."
+        },
+        {
+          "text": "Microsoft's 2023 Work Trend Index, a survey of 31,000 workers across 31 countries, found that 64 percent of respondents said workplace flexibility had improved their work-life balance.",
+          "category": "statistic",
+          "importance": 2,
+          "inline_link": "https://www.microsoft.com/en-us/worklab/work-trend-index/",
+          "expected_status": "direct_cited",
+          "expected_primary_url": "https://www.microsoft.com/en-us/worklab/work-trend-index/",
+          "notes": "Microsoft is the primary publisher of the Work Trend Index."
+        },
+        {
+          "text": "In a now-famous 2021 remark, Goldman Sachs CEO David Solomon called working from home “an aberration that we’re going to correct as soon as possible.”",
+          "category": "quote",
+          "importance": 2,
+          "inline_link": "https://www.cnbc.com/2021/02/25/goldman-ceo-david-solomon-calls-working-from-home-an-aberration.html",
+          "expected_status": "direct_cited",
+          "expected_primary_url": "https://www.cnbc.com/2021/02/25/goldman-ceo-david-solomon-calls-working-from-home-an-aberration.html",
+          "notes": "CNBC carries the original quote; treat as direct_cited even though CNBC is secondary, since the article links to the originating coverage."
+        },
+        {
+          "text": "“We’ve collected enough data now to say hybrid is here to stay,” he told the Financial Times.",
+          "category": "quote",
+          "importance": 2,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "FT articles are paywalled; Tavily does not surface them. Untraceable is correct here — no inline link, no findable transcript."
+        },
+        {
+          "text": "Three years later, Goldman remains one of the strictest enforcers of full in-office attendance among major Wall Street firms.",
+          "category": "event",
+          "importance": 3,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "acceptable_statuses": ["untraceable", "stale_cited"],
+          "notes": "Squishy comparative claim. 'Strictest enforcers' is not directly verifiable from a single primary source."
+        }
+      ]
+    },
+    {
+      "id": "synthetic-002-mediterranean",
+      "source": "synthetic",
+      "fixture": "article2.html",
+      "url": "synthetic://mediterranean-evidence",
+      "title": "The Mediterranean Diet's Evidence Base: What the Numbers Actually Say",
+      "added_date": "2026-04-28",
+      "annotator": "design",
+      "notes": "Stale-cite case. Planted six distortions of real-or-real-sounding sources. Tests whether the classifier flags overspecification when the linked source's snippets don't support the article's framing.",
+      "claims": [
+        {
+          "text": "The most famous piece of evidence is the PREDIMED trial, which showed that the Mediterranean diet cuts your risk of a heart attack by a full 30 percent.",
+          "category": "statistic",
+          "importance": 1,
+          "inline_link": "https://www.nejm.org/doi/full/10.1056/NEJMoa1200303",
+          "expected_status": "stale_cited",
+          "expected_primary_url": "https://www.nejm.org/doi/full/10.1056/NEJMoa1200303",
+          "notes": "Article links the real PREDIMED paper, but PREDIMED's 30% RR was for the composite cardiovascular outcome (stroke + MI + CV death), not heart attack alone. Stale_cited because article distorts the framing."
+        },
+        {
+          "text": "The trial followed roughly 7,400 high-risk Spanish adults and is widely regarded as the gold-standard randomized evidence for any dietary pattern, period.",
+          "category": "event",
+          "importance": 2,
+          "inline_link": "https://www.nejm.org/doi/full/10.1056/NEJMoa1200303",
+          "expected_status": "direct_cited",
+          "acceptable_statuses": ["direct_cited", "stale_cited"],
+          "expected_primary_url": "https://www.nejm.org/doi/full/10.1056/NEJMoa1200303",
+          "notes": "The 7,400 enrollment number is supported by the PREDIMED paper. The 'gold-standard' wording is evaluative but not source-traceable; either status defensible."
+        },
+        {
+          "text": "A 2018 Lancet meta-analysis found that high adherence to a Mediterranean dietary pattern reduces all-cause mortality by 24 percent.",
+          "category": "statistic",
+          "importance": 1,
+          "inline_link": "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(18)31788-4/fulltext",
+          "expected_status": "stale_cited",
+          "acceptable_statuses": ["stale_cited", "untraceable"],
+          "notes": "URL is plausible but the specific 24% number is not in the paper at this DOI. Real Med-diet meta-analyses report similar figures, but the article's specific attribution is shaky."
+        },
+        {
+          "text": "A 2019 JAMA Internal Medicine paper demonstrated that two tablespoons of extra-virgin olive oil per day reverses arterial damage in adults with established cardiovascular disease, returning vessel elasticity to that of a healthy 35-year-old.",
+          "category": "study_reference",
+          "importance": 2,
+          "inline_link": "https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/2734826",
+          "expected_status": "stale_cited",
+          "acceptable_statuses": ["stale_cited", "untraceable"],
+          "notes": "Real-looking JAMA URL, but the specific claim about reversing arterial damage and 'healthy 35-year-old' vessel elasticity is fabricated. Studies on olive oil and endothelial function exist but don't make this specific causal claim."
+        },
+        {
+          "text": "According to a Harvard Medical School analysis, drinking one glass of red wine a day adds an average of three years to your life expectancy.",
+          "category": "study_reference",
+          "importance": 2,
+          "inline_link": "https://www.health.harvard.edu/staying-healthy/is-red-wine-actually-good-for-your-heart",
+          "expected_status": "stale_cited",
+          "expected_primary_url": "https://www.health.harvard.edu/staying-healthy/is-red-wine-actually-good-for-your-heart",
+          "notes": "Harvard URL is real and discusses red wine, but says the opposite of the article — Harvard cautions about confounders and does not claim '3 years extra life expectancy'. Classic stale_cited."
+        },
+        {
+          "text": "The pattern as a whole has been formally endorsed by the World Health Organization as the optimal eating pattern for chronic disease prevention, an unusually strong statement from a body that typically declines to recommend specific named diets.",
+          "category": "attribution",
+          "importance": 2,
+          "inline_link": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+          "expected_status": "stale_cited",
+          "expected_primary_url": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet",
+          "notes": "WHO healthy-diet page is real but discusses general principles, NOT a 'formal endorsement' of any named diet. Article overclaims."
+        },
+        {
+          "text": "“Within the diet research community, the question of whether the Mediterranean pattern works is essentially settled,” wrote Dr. Sarah Chen in a recent Nature commentary.",
+          "category": "quote",
+          "importance": 3,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "Dr. Sarah Chen / Nature commentary fabricated. No findable source for this quote."
+        }
+      ]
+    },
+    {
+      "id": "synthetic-003-midmarket-ai",
+      "source": "synthetic",
+      "fixture": "article3.html",
+      "url": "synthetic://midmarket-ai-adoption",
+      "title": "Why Mid-Market Companies Are Quietly Outpacing the Fortune 500 on AI Adoption",
+      "added_date": "2026-04-28",
+      "annotator": "design",
+      "notes": "Untraceable case. All sources fabricated: 'BridgeWater Research', 'Dr. Marcus Vance' at McKinsey, 'CIO Strategy Forum', 'The Workforce Institute' (real org name; not the data quoted), specific Forrester estimate.",
+      "claims": [
+        {
+          "text": "A 2024 BridgeWater Research survey of 1,400 IT directors found that 67 percent of mid-market firms now have at least one generative AI deployment in production, compared to just 41 percent at Fortune 500 companies.",
+          "category": "statistic",
+          "importance": 1,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "BridgeWater Research as a survey publisher does not exist (close to Bridgewater Associates name, but not a research org publishing IT director surveys)."
+        },
+        {
+          "text": "The same survey reported that mid-market AI projects deliver an average return on investment within 7 months, versus 14 months for enterprise deployments.",
+          "category": "statistic",
+          "importance": 1,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "Same fabricated source as preceding claim."
+        },
+        {
+          "text": "“The agility gap between mid-market and enterprise AI teams is the most underappreciated story in the tech sector right now,” said Dr. Marcus Vance of the McKinsey Digital Practice at last quarter’s CIO Strategy Forum in Boston.",
+          "category": "quote",
+          "importance": 2,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "Marcus Vance is fabricated; CIO Strategy Forum / Boston not a verifiable event with this person."
+        },
+        {
+          "text": "Industry analysts at Forrester now estimate that mid-market firms will spend an aggregate $34 billion on AI tools in 2025, roughly double their 2023 spend.",
+          "category": "statistic",
+          "importance": 2,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "Forrester is real and does publish AI spending forecasts, but the specific $34 billion / mid-market doubling number is fabricated."
+        },
+        {
+          "text": "Enterprise spend is growing too, but more slowly — in the high single digits, year over year.",
+          "category": "statistic",
+          "importance": 2,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "No primary source attributed; no findable matching estimate."
+        },
+        {
+          "text": "A separate poll of 200 small-to-medium business CEOs conducted last fall by The Workforce Institute showed that 78 percent expect their current AI investments to fully replace at least two existing software vendors within the next 24 months.",
+          "category": "statistic",
+          "importance": 2,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "The Workforce Institute (at UKG) is a real org but does not publish data of this shape. Specific 78%/24-month claim fabricated."
+        },
+        {
+          "text": "By contrast, only 23 percent of CEOs at Fortune 1000 companies expressed similar confidence, according to a parallel BridgeWater data set.",
+          "category": "statistic",
+          "importance": 2,
+          "inline_link": null,
+          "expected_status": "untraceable",
+          "notes": "Same fabricated source as the first claim."
+        }
+      ]
+    }
+  ]
+}

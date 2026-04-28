@@ -67,7 +67,7 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 
 - [x] Structured logs per `/analyze` call: claim_id, model, search_count, ms, status, fallback_used, error
 - [x] Append every chain to a JSONL log file (later becomes the graph database)
-- [ ] Real-article eval set: 20 hand-annotated articles with expected chain status per claim
+- [ ] Real-article eval set: 20 hand-annotated articles with expected chain status per claim (scaffold + 3 synthetic seeds shipped; 17 real articles still to annotate)
 - [ ] Eval harness that runs the set, scores precision/recall on status classification, surfaces regressions
 - [ ] Year-match rule in `classify_chain.md`
 - [ ] Author-surname-match rule in `classify_chain.md`
