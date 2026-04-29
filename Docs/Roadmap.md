@@ -73,9 +73,9 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [ ] Author-surname-match rule in `classify_chain.md`
 - [ ] Tie-break heuristic for "wrong primary among plausible candidates": prefer official > peer-reviewed > government > major outlet > blog. Log when ties occur.
 - [x] "False untraceable" fallback: Tavily `include_raw_content: true` retry before declaring untraceable
-- [ ] API key auth on `/analyze` (simple bearer tokens, in-memory or sqlite)
-- [ ] Rate limiting per key
-- [ ] Usage metering per key (count + token estimate, for billing)
+- [x] API key auth on `/analyze` (bearer tokens via `API_KEYS` env, optional via `REQUIRE_AUTH`)
+- [x] Rate limiting per key (in-memory token bucket, env-tunable)
+- [x] Usage metering per key (per-call JSONL log + in-memory rolling counters)
 - [ ] `/v1/analyze` versioned endpoint with stable JSON contract
 - [ ] OpenAPI spec
 - [ ] One-page API documentation (curl examples, response schema, six states explained)
