@@ -69,7 +69,7 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [x] Append every chain to a JSONL log file (later becomes the graph database)
 - [ ] Real-article eval set: 20 hand-annotated articles with expected chain status per claim (scaffold + 3 synthetic seeds shipped; 17 real articles still to annotate)
 - [x] Eval harness that runs the set, scores precision/recall on status classification, surfaces regressions
-- [ ] Year-match rule in `classify_chain.md`
+- [x] Year-match rule in `classify_chain.md`
 - [ ] Author-surname-match rule in `classify_chain.md`
 - [ ] Tie-break heuristic for "wrong primary among plausible candidates": prefer official > peer-reviewed > government > major outlet > blog. Log when ties occur.
 - [ ] "False untraceable" fallback: Tavily `include_raw_content: true` retry before declaring untraceable
@@ -126,7 +126,7 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 
 ## Known limitations (today)
 
-- [ ] Model picks wrong primary when multiple plausible candidates exist (Phase 1: tie-break heuristic)
+- [ ] Model picks wrong primary when multiple plausible candidates exist (Phase 1: year-match rule shipped 2026-04-29 — primary URL accuracy 67% → 89% on the synthetic eval set; author-match and full tie-break still open since first bundled attempt regressed direct_cited cases)
 - [ ] `untraceable` returned when snippet doesn't quote claim's figure verbatim (Phase 1: raw-content retry)
 - [ ] Latency 30–40s for 9-claim articles (spec budget was 25s; defer until customer raises it)
 - [ ] No telemetry on which prompts/models produce best chains (Phase 1: structured logs + eval harness)
