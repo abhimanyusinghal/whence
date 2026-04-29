@@ -2,7 +2,8 @@
 
 `POST /v1/analyze` takes an article (URL + title + text + links) and returns one `ProvenanceChain` per checkable claim it finds. Each chain says where the claim came from, not whether it's true.
 
-The full machine-readable schema is in [`backend/openapi.yaml`](../backend/openapi.yaml). This page is the prose summary.
+- Machine-readable schema: [`backend/openapi.yaml`](../backend/openapi.yaml) (also served live at `/openapi.yaml` and `/v1/openapi.yaml`)
+- Manual test collection: [`Docs/postman_collection.json`](postman_collection.json) — 8 pre-canned requests with assertions; import into Postman and run individually or as a suite.
 
 ## Six chain states
 
