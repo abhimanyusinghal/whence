@@ -72,11 +72,23 @@ function statusCounts(chains: { status: string }[]): Record<string, number> {
   return counts;
 }
 
-app.post(
-  "/analyze",
-  authMiddleware({ required: REQUIRE_AUTH }),
-  rateLimitMiddleware,
-  async (req: Request, res: Response, next: NextFunction) => {
+// Serve the OpenAPI spec. Mounted at / and /v1 — both URLs resolve to the
+// same file on disk so customers can pick whichever feels canonical.
+app.get(["/openapi.yaml", "/v1/openapi.yaml"], async (_req: Request, res: Response) => {
+  try {
+    const specPath = path.resolve(__dirname, "../openapi.yaml");
+    const { readFile } = await import("node:fs/promises");
+    const yaml = await readFile(specPath, "utf8");
+    res.type("application/yaml").send(yaml);
+  } catch (err) {
+    res.status(500).json({
+      error: "internal_error",
+      message: `Could not load openapi.yaml: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+});
+
+const analyzeHandler = async (req: Request, res: Response, next: NextFunction) => {
     const requestId = makeRequestId();
     res.setHeader("X-Request-Id", requestId);
     const principal = req.principal ?? { name: "anonymous", is_anonymous: true };
@@ -225,7 +237,24 @@ app.post(
       }).catch(() => void 0);
       next(err);
     }
-  },
+  };
+
+// Mount the same handler at the legacy and versioned paths.
+// `/analyze`     — back-compat for the Chrome extension and informal callers.
+// `/v1/analyze`  — the contract-stable customer endpoint. Future breaking
+//                  changes go in `/v2/`; this URL's response shape is pinned
+//                  by the OpenAPI spec.
+app.post(
+  "/analyze",
+  authMiddleware({ required: REQUIRE_AUTH }),
+  rateLimitMiddleware,
+  analyzeHandler,
+);
+app.post(
+  "/v1/analyze",
+  authMiddleware({ required: REQUIRE_AUTH }),
+  rateLimitMiddleware,
+  analyzeHandler,
 );
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

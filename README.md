@@ -14,10 +14,17 @@ npm run dev                # starts on http://localhost:8787
 
 Health check: `curl http://localhost:8787/healthz`
 
+## Docs
+
+- [Docs/API.md](Docs/API.md) — `POST /v1/analyze` reference, six-state taxonomy, auth, rate limits.
+- [backend/openapi.yaml](backend/openapi.yaml) — machine-readable spec; also served live at `/v1/openapi.yaml`.
+- [Docs/Roadmap.md](Docs/Roadmap.md) — what's shipped, what's next.
+
 ## Layout
 
 ```
-backend/   Node + Express + TypeScript service. /analyze pipeline.
-extension/ Chrome MV3 extension (added in later step).
+backend/   Node + Express + TypeScript service. /analyze + /v1/analyze.
+extension/ Chrome MV3 extension.
+Docs/      Roadmap, API reference.
 scripts/   dev helpers.
 ```
