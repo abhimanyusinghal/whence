@@ -103,16 +103,52 @@ export async function analyze(
       searchQueries++;
       const candidates = withInlineLink(rawCandidates, claim.inline_link ?? null);
 
-      const result = await provider.classifyChain({
+      const firstPass = await provider.classifyChain({
         article_url: input.url,
         article_title: input.title,
         article_publisher: articlePublisher,
         claim: { ...claim, inline_link: claim.inline_link ?? null },
         candidates,
       });
-      totalIn += result.usage.input_tokens;
-      totalOut += result.usage.output_tokens;
-      chain = { ...result.chain, claim_id: claim.id } satisfies ProvenanceChain;
+      totalIn += firstPass.usage.input_tokens;
+      totalOut += firstPass.usage.output_tokens;
+      chain = { ...firstPass.chain, claim_id: claim.id } satisfies ProvenanceChain;
+
+      // False-untraceable retry: when the first pass returns untraceable,
+      // re-search with raw_content=true so the classifier sees full page
+      // text instead of teaser snippets, then re-classify. Catches cases
+      // where the primary IS in candidates but its snippet doesn't quote
+      // the claim's specific figure verbatim.
+      if (chain.status === "untraceable") {
+        const richCandidates = await tavilySearch({
+          apiKey: opts.tavilyKey,
+          query: claim.normalized,
+          maxResults: 8,
+          includeRawContent: true,
+        });
+        searchCount = 2;
+        searchQueries++;
+        const richWithInline = withInlineLink(richCandidates, claim.inline_link ?? null);
+
+        const secondPass = await provider.classifyChain({
+          article_url: input.url,
+          article_title: input.title,
+          article_publisher: articlePublisher,
+          claim: { ...claim, inline_link: claim.inline_link ?? null },
+          candidates: richWithInline,
+        });
+        totalIn += secondPass.usage.input_tokens;
+        totalOut += secondPass.usage.output_tokens;
+        fallbackUsed = true;
+
+        // Only adopt the second-pass chain if it actually found something.
+        // If it also returns untraceable, keep the first-pass result —
+        // they're equivalent on outcome and the first one's notes are
+        // more honest about why nothing surfaced.
+        if (secondPass.chain.status !== "untraceable") {
+          chain = { ...secondPass.chain, claim_id: claim.id } satisfies ProvenanceChain;
+        }
+      }
     } catch (err) {
       claimError = err instanceof Error ? err.message : String(err);
       chain = {
