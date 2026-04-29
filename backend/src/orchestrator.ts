@@ -54,7 +54,11 @@ export type AnalyzeOptions = {
   requestId?: string;
 };
 
-export type AnalyzeOutput = AnalyzeResponse & { request_id: string };
+export type AnalyzeOutput = AnalyzeResponse & {
+  request_id: string;
+  /** Count of claims where the false-untraceable retry fired. Used by usage metering. */
+  fallback_uses: number;
+};
 
 export async function analyze(
   input: AnalyzeRequest,
@@ -85,6 +89,7 @@ export async function analyze(
   let totalIn = extract.usage.input_tokens;
   let totalOut = extract.usage.output_tokens;
   let searchQueries = 0;
+  let fallbackUses = 0;
 
   const chains = await pLimit(claims, CLAIM_CONCURRENCY, async (claim) => {
     const claimT0 = Date.now();
@@ -140,6 +145,7 @@ export async function analyze(
         totalIn += secondPass.usage.input_tokens;
         totalOut += secondPass.usage.output_tokens;
         fallbackUsed = true;
+        fallbackUses++;
 
         // Only adopt the second-pass chain if it actually found something.
         // If it also returns untraceable, keep the first-pass result —
@@ -202,5 +208,5 @@ export async function analyze(
     ms: Date.now() - t0,
   };
 
-  return { claims, chains, meta, request_id: requestId };
+  return { claims, chains, meta, request_id: requestId, fallback_uses: fallbackUses };
 }
