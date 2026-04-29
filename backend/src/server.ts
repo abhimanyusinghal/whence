@@ -9,8 +9,13 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import { analyze } from "./orchestrator.js";
 import { analyzeCache, analyzeCacheKey } from "./cache.js";
+import { authMiddleware } from "./auth.js";
+import { rateLimitMiddleware } from "./rate_limit.js";
+import { appendUsage, bumpUsage } from "./usage.js";
 import { logEntry, makeRequestId } from "./logger.js";
 import type { AnalyzeRequest } from "./types.js";
+
+const REQUIRE_AUTH = (process.env.REQUIRE_AUTH ?? "false").toLowerCase() === "true";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -39,6 +44,8 @@ app.get("/healthz", (_req: Request, res: Response) => {
     has_anthropic_key: Boolean(process.env.ANTHROPIC_API_KEY),
     has_azure_key: Boolean(process.env.AZURE_OPENAI_API_KEY),
     has_tavily_key: Boolean(process.env.TAVILY_API_KEY),
+    require_auth: REQUIRE_AUTH,
+    api_keys_loaded: (process.env.API_KEYS ?? "").split(",").filter((s) => s.includes(":")).length,
     cache_size: analyzeCache.size,
   });
 });
@@ -65,11 +72,26 @@ function statusCounts(chains: { status: string }[]): Record<string, number> {
   return counts;
 }
 
-app.post(
-  "/analyze",
-  async (req: Request, res: Response, next: NextFunction) => {
+// Serve the OpenAPI spec. Mounted at / and /v1 — both URLs resolve to the
+// same file on disk so customers can pick whichever feels canonical.
+app.get(["/openapi.yaml", "/v1/openapi.yaml"], async (_req: Request, res: Response) => {
+  try {
+    const specPath = path.resolve(__dirname, "../openapi.yaml");
+    const { readFile } = await import("node:fs/promises");
+    const yaml = await readFile(specPath, "utf8");
+    res.type("application/yaml").send(yaml);
+  } catch (err) {
+    res.status(500).json({
+      error: "internal_error",
+      message: `Could not load openapi.yaml: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+});
+
+const analyzeHandler = async (req: Request, res: Response, next: NextFunction) => {
     const requestId = makeRequestId();
     res.setHeader("X-Request-Id", requestId);
+    const principal = req.principal ?? { name: "anonymous", is_anonymous: true };
 
     try {
       const t0 = Date.now();
@@ -92,6 +114,7 @@ app.post(
       const cacheKey = analyzeCacheKey(validated);
       const cached = analyzeCache.get(cacheKey);
       if (cached) {
+        const totalMs = Date.now() - t0;
         res.setHeader("X-Cache", "hit");
         logEntry({
           type: "request",
@@ -103,12 +126,34 @@ app.post(
           page_links_count: validated.page_links.length,
           cache_hit: true,
           claim_count: cached.claims.length,
-          total_ms: Date.now() - t0,
+          total_ms: totalMs,
           total_tokens: 0,
           search_queries: 0,
           status_counts: statusCounts(cached.chains),
           error: null,
         });
+        const usageRecord = {
+          ts: new Date().toISOString(),
+          request_id: requestId,
+          principal: principal.name,
+          is_anonymous: principal.is_anonymous,
+          url: validated.url,
+          cache_hit: true,
+          claim_count: cached.claims.length,
+          total_ms: totalMs,
+          total_tokens: 0,
+          search_queries: 0,
+          fallback_uses: 0,
+          status: "ok" as const,
+          error: null,
+        };
+        bumpUsage(principal.name, {
+          total_tokens: 0,
+          total_searches: 0,
+          cache_hit: true,
+          fallback_uses: 0,
+        });
+        appendUsage(usageRecord).catch(() => void 0);
         res.json(cached);
         return;
       }
@@ -134,6 +179,28 @@ app.post(
         error: null,
       });
 
+      bumpUsage(principal.name, {
+        total_tokens: result.meta.tokens_used,
+        total_searches: result.meta.search_queries,
+        cache_hit: false,
+        fallback_uses: result.fallback_uses,
+      });
+      appendUsage({
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        principal: principal.name,
+        is_anonymous: principal.is_anonymous,
+        url: validated.url,
+        cache_hit: false,
+        claim_count: result.claims.length,
+        total_ms: result.meta.ms,
+        total_tokens: result.meta.tokens_used,
+        search_queries: result.meta.search_queries,
+        fallback_uses: result.fallback_uses,
+        status: "ok",
+        error: null,
+      }).catch(() => void 0);
+
       res.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -153,9 +220,41 @@ app.post(
         status_counts: {},
         error: msg.slice(0, 500),
       });
+      appendUsage({
+        ts: new Date().toISOString(),
+        request_id: requestId,
+        principal: principal.name,
+        is_anonymous: principal.is_anonymous,
+        url: (req.body as { url?: string })?.url ?? "",
+        cache_hit: false,
+        claim_count: 0,
+        total_ms: 0,
+        total_tokens: 0,
+        search_queries: 0,
+        fallback_uses: 0,
+        status: "error",
+        error: msg.slice(0, 500),
+      }).catch(() => void 0);
       next(err);
     }
-  },
+  };
+
+// Mount the same handler at the legacy and versioned paths.
+// `/analyze`     — back-compat for the Chrome extension and informal callers.
+// `/v1/analyze`  — the contract-stable customer endpoint. Future breaking
+//                  changes go in `/v2/`; this URL's response shape is pinned
+//                  by the OpenAPI spec.
+app.post(
+  "/analyze",
+  authMiddleware({ required: REQUIRE_AUTH }),
+  rateLimitMiddleware,
+  analyzeHandler,
+);
+app.post(
+  "/v1/analyze",
+  authMiddleware({ required: REQUIRE_AUTH }),
+  rateLimitMiddleware,
+  analyzeHandler,
 );
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

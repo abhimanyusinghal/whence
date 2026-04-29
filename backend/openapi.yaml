@@ -1,0 +1,322 @@
+openapi: 3.1.0
+info:
+  title: Claim Provenance API
+  version: "1.0.0"
+  description: |
+    Trace claims in articles back to their primary sources. Returns a six-state
+    chain classification per claim — not a true/false verdict.
+
+    Six states: `primary`, `direct_cited`, `indirect_cited`, `stale_cited`,
+    `circular`, `untraceable`. See `Docs/API.md` for the taxonomy.
+  contact:
+    url: https://github.com/abhimanyusinghal/claim
+servers:
+  - url: http://localhost:8787
+    description: Local development
+  - url: https://api.claim-provenance.example
+    description: Production (placeholder — real URL TBD with hosted deploy)
+
+security:
+  - BearerAuth: []
+  - {} # empty = anonymous allowed when REQUIRE_AUTH=false
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      description: Returns service status, provider config, and feature flags. Unauthenticated.
+      security: [] # explicitly no auth
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /v1/analyze:
+    post:
+      summary: Analyze an article and return per-claim provenance chains
+      description: |
+        Extracts factual claims from the page text, searches the web for each,
+        and assembles a chain of sources from the article back to the most
+        upstream primary source it can find. Returns one `ProvenanceChain` per
+        extracted `Claim`.
+
+        Typical latency: 25–40 seconds for a 5–10 claim article. Hard cap on
+        page text is 60,000 characters (server truncates head + tail if
+        exceeded).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+            examples:
+              wfh-article:
+                summary: A short remote-work piece with two inline citations
+                value:
+                  url: https://example.com/wfh-2024
+                  title: What Four Years of Remote-Work Data Actually Tell Us
+                  page_text: |
+                    According to the U.S. Bureau of Labor Statistics, 27 percent
+                    of U.S. employees worked from home at least one day per
+                    week in 2023.
+                  page_links:
+                    - href: https://www.bls.gov/news.release/atus.t05.htm
+                      anchor_text: U.S. Bureau of Labor Statistics
+                      near_text: According to the U.S. Bureau of Labor Statistics, 27 percent
+      responses:
+        "200":
+          description: Analysis complete
+          headers:
+            X-Request-Id:
+              schema: { type: string }
+              description: Unique identifier for this request. Include when reporting issues.
+            X-Cache:
+              schema: { type: string, enum: [hit, miss] }
+              description: Whether the response was served from the in-memory result cache.
+            X-RateLimit-Limit:
+              schema: { type: integer }
+              description: Burst cap (requests).
+            X-RateLimit-Remaining:
+              schema: { type: integer }
+              description: Tokens remaining in your bucket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error: invalid_request
+                message: page_text is required and must be non-empty
+                request_id: req_abc123
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              examples:
+                missing:
+                  value:
+                    error: missing_auth
+                    message: "Authorization: Bearer <token> required"
+                invalid:
+                  value:
+                    error: invalid_token
+                    message: Invalid bearer token
+        "429":
+          description: Rate limit exceeded for this principal
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds until at least one token is available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitedEnvelope"
+        "500":
+          description: Internal server error or missing config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Provision tokens via the `API_KEYS` env var on the server.
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [ok, service, version, provider, require_auth]
+      properties:
+        ok: { type: boolean }
+        service: { type: string }
+        version: { type: string }
+        provider: { type: string, enum: [anthropic, azure_openai] }
+        has_anthropic_key: { type: boolean }
+        has_azure_key: { type: boolean }
+        has_tavily_key: { type: boolean }
+        require_auth: { type: boolean }
+        api_keys_loaded: { type: integer }
+        cache_size: { type: integer }
+
+    PageLink:
+      type: object
+      required: [href, anchor_text, near_text]
+      properties:
+        href:
+          type: string
+          format: uri
+          description: Absolute URL of the link.
+        anchor_text:
+          type: string
+          description: The visible text of the `<a>` tag, trimmed.
+        near_text:
+          type: string
+          description: |
+            Sentence containing the link, or ~600 characters around it. Used by
+            the classifier to associate links with claims.
+
+    AnalyzeRequest:
+      type: object
+      required: [url, title, page_text, page_links]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Canonical URL of the article being analyzed. Becomes node[0] of every chain.
+        title:
+          type: string
+          description: Article title (e.g. `<title>` text).
+        page_text:
+          type: string
+          description: |
+            Plain-text body of the article. Capped at 60,000 characters
+            server-side; longer payloads are truncated head + tail.
+        page_links:
+          type: array
+          items: { $ref: "#/components/schemas/PageLink" }
+          description: All hyperlinks on the page with their anchor + surrounding text.
+
+    Claim:
+      type: object
+      required: [id, text, normalized, category, importance]
+      properties:
+        id:
+          type: string
+          description: Stable identifier (sha256 prefix of `text`).
+        text:
+          type: string
+          description: Verbatim claim from the article.
+        normalized:
+          type: string
+          description: Search-friendly rewrite of the claim with key entities preserved.
+        category:
+          type: string
+          enum: [statistic, quote, study_reference, event, attribution]
+        importance:
+          type: integer
+          enum: [1, 2, 3]
+          description: 1 = central to thesis, 2 = supporting, 3 = peripheral.
+        inline_link:
+          type: string
+          format: uri
+          nullable: true
+          description: URL the article hyperlinks near this claim, if any.
+
+    ProvenanceStatus:
+      type: string
+      enum:
+        - primary
+        - direct_cited
+        - indirect_cited
+        - stale_cited
+        - circular
+        - untraceable
+
+    SourceType:
+      type: string
+      enum: [primary, secondary, tertiary, social, unknown]
+
+    ProvenanceNode:
+      type: object
+      required: [url, title, publisher, type, links_to_upstream, snippet]
+      properties:
+        url: { type: string, format: uri }
+        title: { type: string }
+        publisher: { type: string }
+        published_date:
+          type: string
+          nullable: true
+          description: ISO 8601 date when known.
+        type: { $ref: "#/components/schemas/SourceType" }
+        links_to_upstream:
+          type: array
+          items: { type: string, format: uri }
+          description: URLs (within the candidate set) that this node cites for THIS claim.
+        snippet: { type: string }
+
+    ProvenanceChain:
+      type: object
+      required: [claim_id, status, hop_count, nodes, notes]
+      properties:
+        claim_id:
+          type: string
+          description: Matches a `Claim.id` from the same response.
+        status: { $ref: "#/components/schemas/ProvenanceStatus" }
+        hop_count:
+          type: integer
+          description: |
+            0 = article is itself the primary; 1 = direct cite; ≥2 = indirect.
+            -1 = circular or untraceable.
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/ProvenanceNode" }
+          description: Ordered chain — article → ... → primary.
+        notes:
+          type: string
+          description: 1–2 sentence reasoning from the classifier.
+
+    AnalyzeMeta:
+      type: object
+      required: [tokens_used, search_queries, ms]
+      properties:
+        tokens_used: { type: integer }
+        search_queries: { type: integer }
+        ms: { type: integer, description: Wall-clock time for the full pipeline. }
+
+    AnalyzeResponse:
+      type: object
+      required: [claims, chains, meta, request_id, fallback_uses]
+      properties:
+        request_id:
+          type: string
+          description: Same value as the `X-Request-Id` response header.
+        claims:
+          type: array
+          items: { $ref: "#/components/schemas/Claim" }
+        chains:
+          type: array
+          items: { $ref: "#/components/schemas/ProvenanceChain" }
+          description: One chain per claim, ordered by claim index. Use `claim_id` to match.
+        meta: { $ref: "#/components/schemas/AnalyzeMeta" }
+        fallback_uses:
+          type: integer
+          description: |
+            Number of claims where the false-untraceable retry fired
+            (Tavily re-search with `include_raw_content: true`). Each fallback
+            adds one Tavily search and one classify call.
+
+    ErrorEnvelope:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_request
+            - missing_auth
+            - invalid_token
+            - missing_config
+            - internal_error
+        message: { type: string }
+        request_id: { type: string }
+
+    RateLimitedEnvelope:
+      type: object
+      required: [error, message, retry_after_ms]
+      properties:
+        error: { type: string, enum: [rate_limited] }
+        message: { type: string }
+        retry_after_ms: { type: integer }
