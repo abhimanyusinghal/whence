@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "extract": "tsx src/cli/extract.ts",
     "classify": "tsx src/cli/classify.ts",
-    "analyze": "tsx src/cli/analyze.ts"
+    "analyze": "tsx src/cli/analyze.ts",
+    "eval": "tsx src/cli/eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
