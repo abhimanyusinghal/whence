@@ -76,9 +76,9 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [x] API key auth on `/analyze` (bearer tokens via `API_KEYS` env, optional via `REQUIRE_AUTH`)
 - [x] Rate limiting per key (in-memory token bucket, env-tunable)
 - [x] Usage metering per key (per-call JSONL log + in-memory rolling counters)
-- [ ] `/v1/analyze` versioned endpoint with stable JSON contract
-- [ ] OpenAPI spec
-- [ ] One-page API documentation (curl examples, response schema, six states explained)
+- [x] `/v1/analyze` versioned endpoint with stable JSON contract (legacy `/analyze` aliased for back-compat)
+- [x] OpenAPI 3.1 spec at `backend/openapi.yaml`, served live at `/openapi.yaml` and `/v1/openapi.yaml`
+- [x] One-page API documentation at `Docs/API.md` (curl examples, response schema, six states explained)
 - [ ] Host on Azure
 - [ ] Bound default keys + BYOK override (BYOK for the extension; hosted keys for paying API customers)
 
