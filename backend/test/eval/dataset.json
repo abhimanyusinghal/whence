@@ -22,8 +22,8 @@
           "expected_status": "indirect_cited",
           "acceptable_statuses": ["indirect_cited", "direct_cited"],
           "expected_primary_url": "https://www.nber.org/system/files/working_papers/w30292/w30292.pdf",
-          "known_issue": true,
-          "notes": "Model currently picks Nature 2024 retention paper as primary instead of NBER w30292. Tracked as 'wrong primary among plausible candidates' in roadmap."
+          "known_issue": false,
+          "notes": "Bloom 4.4% productivity claim. Year-match rule (added 2026-04-29) now correctly chains to NBER w30292 instead of Nature 2024. If this regresses to Nature 2024 again, the rule has been weakened or removed."
         },
         {
           "text": "The study followed 1,612 engineers, marketing staff, and finance employees at a large Chinese travel company over six months and is widely considered the largest randomized trial of hybrid work to date.",

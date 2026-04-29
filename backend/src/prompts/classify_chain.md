@@ -26,8 +26,9 @@ You are NOT verifying whether the claim is true. You are tracing where the claim
 3. **`links_to_upstream` for each node** — list the URLs (drawn only from the candidate set, plus URLs already present in earlier nodes) that this node cites for THIS claim. Empty array if the node doesn't cite anything checkable for this claim.
 4. **`published_date`** — ISO 8601 (`YYYY-MM-DD`) when known, otherwise `null`.
 5. **Prefer official / primary sources** over secondary reporting when both appear in candidates.
-6. If candidates conflict (one says X, another says not-X), surface the conflict in `notes`.
-7. `notes` is 1–2 sentences. Be specific about WHY you chose this status.
+6. **Year-match for studies (tiebreaker).** When a claim names a year for the underlying study or paper ("a 2022 study", "the 2019 paper"), prefer candidates whose URL, title, or `published_date` contains that year over candidates from a different year by the same author or institution. NBER paper numbers (`w30292` ≈ 2022, `w31204` ≈ 2023) and DOIs that encode year are valid year signals. This rule selects between equally plausible primaries; it does NOT change which status to choose. A linked source that's the wrong year for a study claim is still a found chain, not a missing one.
+7. If candidates conflict (one says X, another says not-X), surface the conflict in `notes`.
+8. `notes` is 1–2 sentences. Be specific about WHY you chose this status — and when you chose between close candidates, name the rule that broke the tie.
 
 ## Edge cases
 
