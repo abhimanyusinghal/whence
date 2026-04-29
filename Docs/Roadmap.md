@@ -72,7 +72,7 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [x] Year-match rule in `classify_chain.md`
 - [ ] Author-surname-match rule in `classify_chain.md`
 - [ ] Tie-break heuristic for "wrong primary among plausible candidates": prefer official > peer-reviewed > government > major outlet > blog. Log when ties occur.
-- [ ] "False untraceable" fallback: Tavily `include_raw_content: true` retry before declaring untraceable
+- [x] "False untraceable" fallback: Tavily `include_raw_content: true` retry before declaring untraceable
 - [ ] API key auth on `/analyze` (simple bearer tokens, in-memory or sqlite)
 - [ ] Rate limiting per key
 - [ ] Usage metering per key (count + token estimate, for billing)
@@ -127,7 +127,7 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 ## Known limitations (today)
 
 - [ ] Model picks wrong primary when multiple plausible candidates exist (Phase 1: year-match rule shipped 2026-04-29 — primary URL accuracy 67% → 89% on the synthetic eval set; author-match and full tie-break still open since first bundled attempt regressed direct_cited cases)
-- [ ] `untraceable` returned when snippet doesn't quote claim's figure verbatim (Phase 1: raw-content retry)
+- [x] `untraceable` returned when snippet doesn't quote claim's figure verbatim — fixed via raw-content retry shipped 2026-04-29 (status correct 85% → 95%; stale_cited recall 80% → 100% on synthetic eval set)
 - [ ] Latency 30–40s for 9-claim articles (spec budget was 25s; defer until customer raises it)
 - [ ] No telemetry on which prompts/models produce best chains (Phase 1: structured logs + eval harness)
 - [ ] Inline highlights silently skipped when DOM matcher fails (low-pri; UI-only)

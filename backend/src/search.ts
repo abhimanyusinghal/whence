@@ -6,9 +6,12 @@ type TavilyResult = {
   url: string;
   title: string;
   content: string;
+  raw_content?: string;
   score?: number;
   published_date?: string;
 };
+
+const RAW_CONTENT_CAP = 4000; // chars per candidate; keeps token cost bounded
 
 type TavilyResponse = {
   query: string;
@@ -21,6 +24,13 @@ export type SearchOpts = {
   apiKey: string;
   query: string;
   maxResults?: number;
+  /**
+   * When true, Tavily returns the full extracted page text instead of just
+   * a 1–2 sentence snippet. ~3× the response size and ~2× the credit cost,
+   * but lets the classifier verify specific figures/quotes against the
+   * source. Used as the false-untraceable retry path in the orchestrator.
+   */
+  includeRawContent?: boolean;
 };
 
 export async function tavilySearch(opts: SearchOpts): Promise<SearchCandidate[]> {
@@ -34,7 +44,7 @@ export async function tavilySearch(opts: SearchOpts): Promise<SearchCandidate[]>
       query: opts.query,
       search_depth: "advanced",
       max_results: opts.maxResults ?? 8,
-      include_raw_content: false,
+      include_raw_content: opts.includeRawContent ?? false,
       include_answer: false,
     }),
   });
@@ -45,13 +55,22 @@ export async function tavilySearch(opts: SearchOpts): Promise<SearchCandidate[]>
   }
 
   const data = (await res.json()) as TavilyResponse;
-  return data.results.map((r) => ({
-    url: r.url,
-    title: r.title,
-    publisher: publisherFromUrl(r.url),
-    published_date: r.published_date ?? null,
-    snippet: r.content,
-  }));
+  return data.results.map((r) => {
+    // Prefer raw_content when requested and present — gives the classifier
+    // the actual page text instead of a teaser snippet. Cap to avoid
+    // blowing the token budget on a single long article.
+    const useRaw = opts.includeRawContent && r.raw_content;
+    const text = useRaw
+      ? (r.raw_content as string).slice(0, RAW_CONTENT_CAP)
+      : r.content;
+    return {
+      url: r.url,
+      title: r.title,
+      publisher: publisherFromUrl(r.url),
+      published_date: r.published_date ?? null,
+      snippet: text,
+    };
+  });
 }
 
 export function publisherFromUrl(url: string): string {
