@@ -17,6 +17,7 @@ Health check: `curl http://localhost:8787/healthz`
 ## Docs
 
 - [Docs/API.md](Docs/API.md) — `POST /v1/analyze` reference, six-state taxonomy, auth, rate limits.
+- [Docs/postman_collection.json](Docs/postman_collection.json) — Postman collection with happy paths + error cases + assertions. Import and click run.
 - [backend/openapi.yaml](backend/openapi.yaml) — machine-readable spec; also served live at `/v1/openapi.yaml`.
 - [Docs/Roadmap.md](Docs/Roadmap.md) — what's shipped, what's next.
 
