@@ -23,8 +23,25 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     margin: 0; padding: 14px 14px 24px; color: var(--c-text); font-size: 13px;
   }
-  h1 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 4px;
+  }
+  .panel-header-actions { display: flex; gap: 6px; align-items: center; }
+  h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  #settings-btn {
+    border: none; background: transparent; color: var(--c-muted);
+    font-size: 12px; padding: 4px 6px; cursor: pointer; text-decoration: underline;
+  }
+  #settings-btn:hover { color: var(--c-text); }
   .sub { font-size: 11px; color: var(--c-muted); margin: 0 0 14px; }
+  #analyze-btn {
+    padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
+    border: 1px solid #2a6dfb; background: #2a6dfb; color: #fff;
+    border-radius: 4px; white-space: nowrap;
+  }
+  #analyze-btn:hover:not(:disabled) { background: #1d5be0; border-color: #1d5be0; }
+  #analyze-btn:disabled { background: #aaa; border-color: #aaa; cursor: progress; }
   .meta {
     font-size: 11px; color: var(--c-muted); margin-bottom: 12px;
     padding-bottom: 8px; border-bottom: 1px solid var(--c-border);
@@ -80,6 +97,21 @@
   .node-type.t-tertiary { background: #f4ebd8; color: #6b4f00; }
   .node-type.t-social { background: #efe4ff; color: #5a23a3; }
 
+  .node-quality {
+    font-size: 9px; padding: 1px 4px; border-radius: 2px;
+    background: #f0f0f2; color: #555; flex-shrink: 0; font-variant-numeric: tabular-nums;
+  }
+  .node-quality.q-hi { background: #e2f4e6; color: #0e6627; }
+  .node-quality.q-mid { background: #f4ebd8; color: #6b4f00; }
+  .node-quality.q-lo { background: #fde0e3; color: #9b1322; }
+
+  .evidence-quote {
+    margin: 4px 0 4px 18px; padding: 6px 10px;
+    border-left: 2px solid var(--c-border);
+    font-size: 11px; color: #444; line-height: 1.45;
+    font-style: italic;
+  }
+
   .notes {
     font-size: 11px; color: #555; margin-top: 8px; line-height: 1.45;
     padding-top: 6px; border-top: 1px dashed var(--c-border);
@@ -94,15 +126,41 @@
   @keyframes shimmer { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
   .skeleton { animation: shimmer 1.4s ease-in-out infinite; }
 
+  .progress {
+    margin-bottom: 12px; padding: 10px 12px;
+    border: 1px solid #cfdcfb; background: #f3f7ff; border-radius: 4px;
+    font-size: 12px; line-height: 1.5;
+  }
+  .progress-phase { font-weight: 600; color: #1a4ba8; margin-bottom: 4px; display: flex; align-items: baseline; gap: 8px; }
+  .progress-elapsed { font-variant-numeric: tabular-nums; color: #666; font-weight: 500; font-size: 11px; }
+  .progress-detail { color: #555; font-size: 11px; }
+  .progress-bar { margin-top: 8px; height: 4px; background: #dde6f8; border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill {
+    height: 100%; background: #2a6dfb; width: 0%;
+    transition: width 0.4s linear;
+  }
+
+  .tab-warning {
+    margin-bottom: 10px; padding: 8px 10px;
+    background: #fff8d6; border: 1px solid #f0b400; border-radius: 4px;
+    font-size: 11px; line-height: 1.45; color: #6b4f00;
+  }
+  .tab-warning strong { color: #4a3700; }
+
   .error { color: var(--c-untraceable); font-size: 12px; padding: 16px; border: 1px solid #f3c4ca; background: #fff5f6; border-radius: 4px; }
 </style>
 </head>
 <body>
-<h1>Claim Provenance</h1>
-<p class="sub" id="sub">Click "Analyze this page" in the popup.</p>
+<header class="panel-header">
+  <h1>Claim Provenance</h1>
+  <div class="panel-header-actions">
+    <button id="settings-btn" type="button" title="Choose search providers and BYOK keys">Settings</button>
+    <button id="analyze-btn">Analyze this page</button>
+  </div>
+</header>
+<p class="sub" id="sub">Trace claims on this page back to their primary sources.</p>
 <div id="content" class="empty">
-  Open the extension popup and trigger an analysis.<br>
-  Claim chains will appear here.
+  Click <em>Analyze this page</em> above to trace claims on the active tab.
 </div>
 <script src="sidepanel.js"></script>
 </body>

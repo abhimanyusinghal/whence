@@ -16,6 +16,40 @@
 | `circular` | Chain loops without reaching a primary. `hop_count = -1`. |
 | `untraceable` | No primary surfaces. Likely assertion, opinion, or fabrication. `hop_count = -1`. |
 
+## Search providers
+
+The backend uses a multi-provider web-search aggregator: every enabled provider runs in parallel within each claim, results are deduplicated by canonical URL, and cross-provider corroboration boosts a candidate's rank. Five providers are supported:
+
+| Provider | Free tier (typical) | Env keys |
+|---|---|---|
+| Tavily | 1,000 searches/mo | `TAVILY_API_KEY` |
+| Brave Search | 2,000 queries/mo | `BRAVE_API_KEY` |
+| Serper.dev | 2,500 one-time credits, then paid | `SERPER_API_KEY` |
+| Google PSE | 100 queries/day per CSE | `GOOGLE_PSE_KEY`, `GOOGLE_PSE_CX` |
+| Bing Web Search | 1,000 queries/mo | `BING_API_KEY` |
+
+If any provider key is set in the server env, it's part of the public default. Callers can override per-request via `search_options`:
+
+```json
+{
+  "url": "...",
+  "title": "...",
+  "page_text": "...",
+  "page_links": [],
+  "search_options": {
+    "providers": ["brave", "serper"],
+    "byok": {
+      "brave": "BSAxxxxxxxxx",
+      "google_pse": { "key": "AIza...", "cx": "0123:abcd" }
+    }
+  }
+}
+```
+
+If `providers` is supplied, only those run; anything in the list without a usable key (env or BYOK) is reported in `meta.search_providers_skipped`. If no provider is usable for the request, the server returns 500 `missing_config`.
+
+> All enabled providers fan out in parallel inside each claim, so adding a provider adds the slower of the two (not the sum) to per-claim latency. The cost is rate-limit pressure: every provider gets one query per claim per analysis (plus a Tavily-only retry for false-untraceable cases).
+
 ## Authentication
 
 Bearer tokens. Provision them with the `API_KEYS` env on the server: `API_KEYS=tok_alpha:partner_a,tok_beta:partner_b`. The string before the colon is the secret; after the colon is the public name surfaced in logs and rate-limit buckets.
@@ -43,11 +77,18 @@ When `REQUIRE_AUTH=false` (default), unauthenticated calls are allowed and attri
       "anchor_text": "U.S. Bureau of Labor Statistics",
       "near_text": "According to the U.S. Bureau of Labor Statistics, 27 percent..."
     }
-  ]
+  ],
+  "provenance": {
+    "canonical_url": "https://example.com/article",
+    "author": "Jane Doe",
+    "published_date": "2026-04-12T08:30:00Z",
+    "accessed_at": "2026-04-30T14:22:18Z",
+    "html_hash": "f4a3...c91b"
+  }
 }
 ```
 
-All four top-level fields are required. `page_links[]` may be empty but must be present.
+`url`, `title`, `page_text`, and `page_links` are required. `page_links[]` may be empty but must be present. `provenance` is optional — older clients may omit it; the Chrome extension started sending it in Phase 1 so a later audit can prove what the user actually saw, even if the source page changes. Every field inside `provenance` is independently optional.
 
 ### Response (200)
 
@@ -76,7 +117,9 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
           "publisher": "example.com",
           "type": "secondary",
           "links_to_upstream": ["https://www.bls.gov/news.release/atus.t05.htm"],
-          "snippet": "..."
+          "snippet": "...",
+          "evidence_quote": "",
+          "source_quality_score": 0.5
         },
         {
           "url": "https://www.bls.gov/news.release/atus.t05.htm",
@@ -84,7 +127,9 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
           "publisher": "bls.gov",
           "type": "primary",
           "links_to_upstream": [],
-          "snippet": "..."
+          "snippet": "Average hours per day spent working at home, 2023 annual averages...",
+          "evidence_quote": "27 percent of employed persons did some or all of their work at home",
+          "source_quality_score": 1.0
         }
       ],
       "notes": "Article links directly to a primary BLS source."
@@ -92,8 +137,11 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
   ],
   "meta": {
     "tokens_used": 7081,
-    "search_queries": 1,
-    "ms": 14500
+    "search_queries": 3,
+    "ms": 14500,
+    "search_providers_used": ["tavily", "brave", "serper"],
+    "search_providers_skipped": ["google_pse"],
+    "search_provider_errors": { "bing": "bing 429: throttled" }
   },
   "fallback_uses": 0
 }
@@ -170,7 +218,7 @@ curl -X POST http://localhost:8787/v1/analyze \
   "provider": "azure_openai",
   "has_anthropic_key": true,
   "has_azure_key": true,
-  "has_tavily_key": true,
+  "search_providers_configured": ["tavily", "brave"],
   "require_auth": false,
   "api_keys_loaded": 2,
   "cache_size": 0
