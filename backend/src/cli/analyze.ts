@@ -64,14 +64,22 @@ async function main() {
     page_links: extractLinks(html),
   };
 
-  const tavilyKey = process.env.TAVILY_API_KEY;
-  if (!tavilyKey) throw new Error("TAVILY_API_KEY is not set");
+  const env: import("../search/index.js").EnvKeys = {};
+  if (process.env.TAVILY_API_KEY) env.tavily = process.env.TAVILY_API_KEY;
+  if (process.env.BRAVE_API_KEY) env.brave = process.env.BRAVE_API_KEY;
+  if (process.env.SERPER_API_KEY) env.serper = process.env.SERPER_API_KEY;
+  if (process.env.BING_API_KEY) env.bing = process.env.BING_API_KEY;
+  if (process.env.GOOGLE_PSE_KEY && process.env.GOOGLE_PSE_CX) {
+    env.google_pse = { key: process.env.GOOGLE_PSE_KEY, cx: process.env.GOOGLE_PSE_CX };
+  }
+  if (Object.keys(env).length === 0) throw new Error("No search provider keys set in env");
 
   console.error(`[cli] fixture: ${fixturePath}`);
+  console.error(`[cli] providers: ${Object.keys(env).join(", ")}`);
   console.error(`[cli] running full /analyze pipeline...`);
   console.error("");
 
-  const result = await analyze(article, { tavilyKey });
+  const result = await analyze(article, { env });
 
   console.error("");
   console.error(

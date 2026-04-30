@@ -3,17 +3,18 @@
   "name": "Claim Provenance",
   "version": "0.1.0",
   "description": "Trace the provenance of factual claims in articles back to their original sources.",
-  "permissions": ["activeTab", "scripting", "sidePanel", "storage"],
+  "permissions": ["activeTab", "scripting", "sidePanel", "storage", "tabs"],
   "host_permissions": [
     "http://localhost:8787/*",
-    "http://127.0.0.1:8787/*"
+    "http://127.0.0.1:8787/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "service_worker.js"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Claim Provenance",
+    "default_title": "Claim Provenance — open side panel",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -27,5 +28,9 @@
   },
   "side_panel": {
     "default_path": "sidepanel.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
   }
 }

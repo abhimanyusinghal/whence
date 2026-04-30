@@ -81,6 +81,10 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [x] One-page API documentation at `Docs/API.md` (curl examples, response schema, six states explained)
 - [ ] Host on Azure
 - [ ] Bound default keys + BYOK override (BYOK for the extension; hosted keys for paying API customers)
+- [x] Extension: capture canonicalUrl, author, publishedDate, accessedAt, htmlHash; pass through to /v1/analyze
+- [x] Prompt-injection hardening: wrap page_text in `<untrusted_page_content>`, strip script/hidden DOM, add treat-as-data instruction
+- [x] Numeric `source_quality_score` (0–1) on `ProvenanceNode`; feed the existing tie-break heuristic
+- [x] Capture exact `evidence_quote` (verbatim span) per node, distinct from the Tavily snippet
 
 
 ---
