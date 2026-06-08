@@ -46,8 +46,3 @@ export async function appendBlobLine(container: string, line: string): Promise<b
 export function blobLoggingEnabled(): boolean {
   return Boolean(process.env.BLOB_CONNECTION_STRING);
 }
-
-export function _resetBlobCache(): void {
-  _blobCache.clear();
-  _service = null;
-}

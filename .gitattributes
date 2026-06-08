@@ -1,0 +1,16 @@
+# Normalize line endings: store text as LF in the repo, check out native on each OS.
+* text=auto eol=lf
+
+# Files that must stay LF regardless of platform.
+*.sh   text eol=lf
+*.mjs  text eol=lf
+*.ts   text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+
+# Treat these as binary (no EOL munging, no diffs).
+*.png  binary
+*.zip  binary
