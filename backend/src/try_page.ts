@@ -2,7 +2,7 @@ export const TRY_PAGE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Provenance — Try it</title>
+<title>Claim Provenance Engine — Try it</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
 <style>
@@ -129,7 +129,7 @@ export const TRY_PAGE_HTML = `<!DOCTYPE html>
 <div class="wrap">
 
 <header>
-  <h1>Provenance — Try it</h1>
+  <h1>Claim Provenance Engine — Try it</h1>
   <p class="lede">
     Paste a news, research, or feature article — we extract every factual claim and trace each one back to its likely original source via web search. Built for journalists and researchers. <a href="/docs">API docs</a>.
   </p>
@@ -164,7 +164,7 @@ export const TRY_PAGE_HTML = `<!DOCTYPE html>
   <a href="/docs">API docs</a> ·
   <a href="/v1/openapi.yaml">OpenAPI spec</a> ·
   <a href="/healthz">Health</a> ·
-  <span>Provenance by Zustis</span>
+  <a href="https://github.com/abhimanyusinghal/claim" target="_blank" rel="noopener">Claim Provenance Engine</a>
 </footer>
 
 </div>

@@ -71,7 +71,7 @@ app.get("/docs", async (_req: Request, res: Response) => {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Provenance API — Reference</title>
+<title>Claim Provenance Engine API — Reference</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
 </head>

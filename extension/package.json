@@ -2,7 +2,18 @@
   "name": "claim-provenance-extension",
   "version": "0.1.0",
   "private": true,
+  "description": "Chrome MV3 extension for the Claim Provenance Engine — analyze the current page and trace its claims to source.",
+  "author": "Abhimanyu Singhal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abhimanyusinghal/claim.git",
+    "directory": "extension"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
@@ -10,7 +21,7 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.270",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.25.0",
     "typescript": "^5.6.0"
   }
 }

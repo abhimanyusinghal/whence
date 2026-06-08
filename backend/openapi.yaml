@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Claim Provenance API
-  version: "1.0.0"
+  title: Claim Provenance Engine API
+  version: "0.1.0"
   description: |
     Trace claims in articles back to their primary sources. Returns a six-state
     chain classification per claim — not a true/false verdict.
@@ -10,11 +10,12 @@ info:
     `circular`, `untraceable`. See `Docs/API.md` for the taxonomy.
   contact:
     url: https://github.com/abhimanyusinghal/claim
+  license:
+    name: MIT
+    url: https://github.com/abhimanyusinghal/claim/blob/main/LICENSE
 servers:
   - url: http://localhost:8787
-    description: Local development
-  - url: https://api.claim-provenance.example
-    description: Production (placeholder — real URL TBD with hosted deploy)
+    description: Local (self-hosted) — substitute your own host if you deploy it
 
 # No authentication. Self-host the backend, supply your own provider keys via
 # .env (or per-request BYOK in search_options), and call it directly.
@@ -100,8 +101,7 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
               example:
                 error: content_blocked
-                message: "This article tripped Azure OpenAI's content filter. Set LLM_PROVIDER=anthropic in .env and restart."
-                provider: azure_openai
+                message: "The AI provider's safety filter blocked this article. This often happens with medical, political, or news content. Try a different article."
                 request_id: req_4f67f25c66c6
         "500":
           description: Internal server error or missing config
@@ -398,6 +398,3 @@ components:
             - internal_error
         message: { type: string }
         request_id: { type: string }
-        provider:
-          type: string
-          description: Set on `content_blocked` errors so the caller knows which provider rejected it.

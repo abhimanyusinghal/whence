@@ -9,3 +9,9 @@ dist/
 extension/dist/
 backend/data/
 deploy.zip
+*.tsbuildinfo
+*.tgz
+npm-debug.log*
+Thumbs.db
+Desktop.ini
+.idea/

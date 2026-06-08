@@ -29,6 +29,11 @@ curl http://localhost:8787/healthz
 The `search_providers_configured` array in the response tells you which search providers
 the server found keys for.
 
+> **Production build:** `npm run dev` runs the TypeScript directly via `tsx` (auto-reload).
+> For a compiled run, use `cd backend && npm install && npm run build && npm start`.
+
+> **Node:** requires Node.js **20+**.
+
 ## Configure keys
 
 You need **two things**: one LLM provider (to read the article) and **at least one** web-search
@@ -139,6 +144,41 @@ The extension's **Options page** mirrors the multi-provider config: toggle which
 and optionally enter your own keys (BYOK) so your searches run on your quota instead of the
 server's. These choices are sent to the backend as `search_options` on each Analyze.
 
+## Data & privacy
+
+Know what goes where before running this on sensitive material — it all runs under **your** keys
+and **your** infrastructure; nothing is sent to the project authors. You are the operator.
+
+- **To your LLM provider** (Anthropic or Azure OpenAI): the article's full text, title, and URL, on every analysis.
+- **To your search providers** (whichever you enable): a search query derived from each claim.
+- **Written to disk by default**: every analyzed claim and its provenance chain is appended to
+  `./data/chains.jsonl` (set `CHAINS_LOG_FILE=` to an empty value to disable). Request-level logs
+  (including URL + title) go to stderr.
+- **Off by default**: setting `BLOB_CONNECTION_STRING` uploads those chain records to *your* Azure
+  Blob Storage instead of the local file. Leave it blank to keep everything local.
+
+## Security & deployment
+
+The backend has **no authentication and no rate limiting** by design — it's meant to run locally or
+inside infrastructure you control. `/analyze` and `/v1/analyze` are **unauthenticated and spend your
+provider budget on every call** (LLM + search credits).
+
+**Do not expose the backend directly on the public internet.** If you need remote access, put it
+behind your own reverse proxy / auth / rate limiting (nginx, Cloudflare Access, an API gateway,
+etc.). The server binds all interfaces on port 8787, so run it on `localhost` or a private network
+unless you've added your own gating.
+
+## Disclaimer & limitations
+
+Output is an **automated, model-generated heuristic**, not a verdict. The six states (including
+`stale_cited` and `untraceable`) describe only what the tool could trace from the page and search
+results — they are **not** findings of dishonesty, plagiarism, or fabrication against any author or
+publisher, and **not** a true/false judgment of the claim itself. The model can miss a real source,
+misread a citation, or mislabel a chain.
+
+Treat results as a research aid to be verified by a human, not as evidence. The software is provided
+"as is", without warranty of any kind (see [LICENSE](LICENSE)).
+
 ## Docs
 
 - [Docs/API.md](Docs/API.md) — `POST /v1/analyze` reference, six-state taxonomy, search providers.
@@ -154,3 +194,12 @@ extension/ Chrome MV3 extension.
 Docs/      Roadmap, API reference.
 scripts/   dev helpers.
 ```
+
+## Contributing & security
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue
+privately, see [SECURITY.md](SECURITY.md) (please don't open a public issue for vulnerabilities).
+
+## License
+
+[MIT](LICENSE) © 2026 Abhimanyu Singhal.

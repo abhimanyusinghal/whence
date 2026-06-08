@@ -89,10 +89,3 @@ export async function appendChainRecord(record: ChainLogRecord): Promise<void> {
     // don't flip _disabled — could be transient
   }
 }
-
-/** Test helper — reset cached state so a new env var takes effect. */
-export function _resetForTesting(): void {
-  _resolvedPath = null;
-  _disabled = false;
-  _ensuredDir = false;
-}

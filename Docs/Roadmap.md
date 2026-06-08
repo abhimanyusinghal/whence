@@ -12,7 +12,7 @@ This product traces claims in articles back to their primary sources. It does no
 
 Six chain states: `primary`, `direct_cited`, `indirect_cited`, `stale_cited`, `circular`, `untraceable`.
 
-The strategy: hold the no-verdict line. The engine sells because it shows where claims actually come from, not because it picks fights about truth. Don't let any customer talk us into a true/false toggle.
+Design principle: hold the no-verdict line. The value is showing where claims actually come from, not adjudicating truth. Resist requests to add a true/false toggle.
 
 ---
 
@@ -104,8 +104,8 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [ ] CMS plugin (WordPress first; Substack / Ghost / Medium are downstream of WordPress)
 
 
-- [ ] One published case study: pick a viral LinkedIn post or news cycle, run the engine over it, publish the chain breakdown. This is the marketing.
-- [ ] Chrome Web Store listing (extension stays free — it's the funnel, not the revenue)
+- [ ] One published case study: run the engine over a viral post or news cycle and publish the chain breakdown
+- [ ] Chrome Web Store listing (extension stays free)
 
 ---
 
@@ -116,12 +116,8 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [ ] Provenance Score per publisher (now meaningful because the graph has volume)
 - [ ] De-dup claims across articles (same statistic, different sources → graph nodes converge)
 
-- [ ] Publisher provenance dataset (CSV / API) for media-monitoring buyers, insurance, ratings
-- [ ] AI grounding API: structured claim → primary-source pairs for LLM developers (Anthropic, Perplexity, You.com — they all need this)
-
-
-- [ ] Compliance / KYC, OR academic libraries, OR PR / comms
-- [ ] Vertical pricing page, vertical case study, one named pilot
+- [ ] Publisher provenance dataset (CSV / API) derived from the graph
+- [ ] AI grounding API: structured claim → primary-source pairs for LLM developers
 
 ---
 
@@ -130,8 +126,8 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [ ] LinkedIn / X URL-paste mode (URL-only, no DOM scraping)
 - [ ] Latency optimization (parallelize Tavily within claims, prompt-caching gains, smaller model for extract)
 - [ ] Firefox port
-- [ ] Slack / Notion plugin (only if a paying customer asks)
-- [ ] Multi-language support (driven by customer geography)
+- [ ] Slack / Notion plugin (if there's demand)
+- [ ] Multi-language support
 
 
 ## Known limitations (today)

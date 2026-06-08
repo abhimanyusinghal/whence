@@ -1,4 +1,4 @@
-# Claim Provenance API
+# Claim Provenance Engine API
 
 `POST /v1/analyze` takes an article (URL + title + text + links) and returns one `ProvenanceChain` per checkable claim it finds. Each chain says where the claim came from, not whether it's true.
 

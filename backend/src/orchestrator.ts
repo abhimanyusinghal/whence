@@ -65,7 +65,7 @@ export type AnalyzeOptions = {
 
 export type AnalyzeOutput = AnalyzeResponse & {
   request_id: string;
-  /** Count of claims where the false-untraceable retry fired. Used by usage metering. */
+  /** Count of claims where the false-untraceable retry fired. Diagnostic counter surfaced in the API response. */
   fallback_uses: number;
 };
 

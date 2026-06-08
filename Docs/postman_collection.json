@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "Claim Provenance API",
+    "name": "Claim Provenance Engine API",
     "description": "Manual test collection for the /v1/analyze endpoint.\n\n## Setup\n\n1. Import this file into Postman (File → Import → drag `postman_collection.json`).\n2. Open the collection's **Variables** tab and set:\n   - `baseUrl` — e.g. `http://localhost:8787` for local dev.\n3. Make sure the backend is running with your provider keys in `.env` (`cd backend && npm run start`). No auth — there is no login or bearer token.\n4. Run requests individually, or use the **Run collection** button to execute the whole suite end-to-end.\n\nThe collection includes assertions on each request — open the **Test Results** tab after running to see what passed/failed.\n\n## See also\n\n- [`Docs/API.md`](API.md) — prose reference\n- [`backend/openapi.yaml`](../backend/openapi.yaml) — machine-readable spec\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
