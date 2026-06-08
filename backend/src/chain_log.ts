@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { appendBlobLine, blobLoggingEnabled } from "./blob_log.js";
 import type { Claim, PageProvenance, ProvenanceChain } from "./types.js";
 
 /**
@@ -71,6 +72,11 @@ async function ensureDir(filePath: string): Promise<boolean> {
  * the same guarantee for files opened with FILE_APPEND_DATA.
  */
 export async function appendChainRecord(record: ChainLogRecord): Promise<void> {
+  if (blobLoggingEnabled()) {
+    await appendBlobLine("chains", JSON.stringify(record));
+    return;
+  }
+
   const filePath = getLogPath();
   if (!filePath) return;
 
