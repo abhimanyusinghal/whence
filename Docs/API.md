@@ -48,19 +48,11 @@ If any provider key is set in the server env, it's part of the public default. C
 
 If `providers` is supplied, only those run; anything in the list without a usable key (env or BYOK) is reported in `meta.search_providers_skipped`. If no provider is usable for the request, the server returns 500 `missing_config`.
 
-> All enabled providers fan out in parallel inside each claim, so adding a provider adds the slower of the two (not the sum) to per-claim latency. The cost is rate-limit pressure: every provider gets one query per claim per analysis (plus a Tavily-only retry for false-untraceable cases).
+> All enabled providers fan out in parallel inside each claim, so adding a provider adds the slower of the two (not the sum) to per-claim latency. The cost is the providers' own free-tier budgets: every provider gets one query per claim per analysis (plus a Tavily-only retry for false-untraceable cases).
 
 ## Authentication
 
-Bearer tokens. Provision them with the `API_KEYS` env on the server: `API_KEYS=tok_alpha:partner_a,tok_beta:partner_b`. The string before the colon is the secret; after the colon is the public name surfaced in logs and rate-limit buckets.
-
-```
-Authorization: Bearer tok_alpha
-```
-
-When `REQUIRE_AUTH=false` (default), unauthenticated calls are allowed and attributed to the `anonymous` principal. Set `REQUIRE_AUTH=true` in production.
-
-`/healthz` is intentionally unauthenticated so probes and load balancers work without keys.
+None. This is a self-hosted tool — run the backend with your own provider keys (LLM + at least one search provider) in `.env`, or supply per-request keys via `search_options.byok`, and call `/v1/analyze` directly. There is no login, no API key, and no per-caller metering.
 
 ## POST `/v1/analyze`
 
@@ -155,20 +147,6 @@ When `REQUIRE_AUTH=false` (default), unauthenticated calls are allowed and attri
 |---|---|
 | `X-Request-Id` | Same as `request_id` in the body. Quote when reporting issues. |
 | `X-Cache` | `hit` or `miss`. Cache key is `sha256(url + page_text)`; LRU 50 entries. |
-| `X-RateLimit-Limit` | Burst cap for your principal. |
-| `X-RateLimit-Remaining` | Tokens left in your bucket. |
-
-### Rate limiting
-
-Per-principal token bucket. Refills at `RATE_LIMIT_PER_MINUTE` (default 60) requests/minute, capped at `RATE_LIMIT_BURST` (default 30). When exhausted you get **429** with `Retry-After` (seconds) and a JSON body:
-
-```json
-{
-  "error": "rate_limited",
-  "message": "Rate limit exceeded for principal \"partner_a\". Retry in 3s.",
-  "retry_after_ms": 3000
-}
-```
 
 ### Error envelope
 
@@ -185,27 +163,15 @@ All non-200 responses match:
 | Status | `error` values |
 |---|---|
 | 400 | `invalid_request` |
-| 401 | `missing_auth`, `invalid_token` |
-| 429 | `rate_limited` |
+| 422 | `content_blocked` (LLM provider's safety filter rejected the article) |
 | 500 | `missing_config`, `internal_error` |
 
 ## curl example
-
-Cold call (no token, REQUIRE_AUTH=false):
 
 ```sh
 curl -X POST http://localhost:8787/v1/analyze \
   -H 'Content-Type: application/json' \
   -d @article.json | jq '.chains[] | {status, hop_count, primary: .nodes[-1].url}'
-```
-
-With auth:
-
-```sh
-curl -X POST http://localhost:8787/v1/analyze \
-  -H 'Authorization: Bearer tok_alpha' \
-  -H 'Content-Type: application/json' \
-  -d @article.json
 ```
 
 ## GET `/healthz`
@@ -219,13 +185,11 @@ curl -X POST http://localhost:8787/v1/analyze \
   "has_anthropic_key": true,
   "has_azure_key": true,
   "search_providers_configured": ["tavily", "brave"],
-  "require_auth": false,
-  "api_keys_loaded": 2,
   "cache_size": 0
 }
 ```
 
-Unauthenticated. Useful for health probes and ops debugging — `api_keys_loaded` confirms the env was parsed without leaking the tokens.
+Useful for health probes and ops debugging — `search_providers_configured` confirms which search providers the server found keys for.
 
 ## Versioning
 

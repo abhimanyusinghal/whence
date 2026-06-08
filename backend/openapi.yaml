@@ -16,16 +16,14 @@ servers:
   - url: https://api.claim-provenance.example
     description: Production (placeholder — real URL TBD with hosted deploy)
 
-security:
-  - BearerAuth: []
-  - {} # empty = anonymous allowed when REQUIRE_AUTH=false
+# No authentication. Self-host the backend, supply your own provider keys via
+# .env (or per-request BYOK in search_options), and call it directly.
 
 paths:
   /healthz:
     get:
       summary: Health check
-      description: Returns service status, provider config, and feature flags. Unauthenticated.
-      security: [] # explicitly no auth
+      description: Returns service status and provider config.
       responses:
         "200":
           description: Service is up
@@ -76,12 +74,6 @@ paths:
             X-Cache:
               schema: { type: string, enum: [hit, miss] }
               description: Whether the response was served from the in-memory result cache.
-            X-RateLimit-Limit:
-              schema: { type: integer }
-              description: Burst cap (requests).
-            X-RateLimit-Remaining:
-              schema: { type: integer }
-              description: Tokens remaining in your bucket.
           content:
             application/json:
               schema:
@@ -96,31 +88,21 @@ paths:
                 error: invalid_request
                 message: page_text is required and must be non-empty
                 request_id: req_abc123
-        "401":
-          description: Missing or invalid bearer token
+        "422":
+          description: |
+            Content rejected by the LLM provider's safety filter (e.g. Azure
+            OpenAI content management policy). The article itself is not
+            invalid, but the model refused to process it. Switch
+            `LLM_PROVIDER` or change articles.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-              examples:
-                missing:
-                  value:
-                    error: missing_auth
-                    message: "Authorization: Bearer <token> required"
-                invalid:
-                  value:
-                    error: invalid_token
-                    message: Invalid bearer token
-        "429":
-          description: Rate limit exceeded for this principal
-          headers:
-            Retry-After:
-              schema: { type: integer }
-              description: Seconds until at least one token is available.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateLimitedEnvelope"
+              example:
+                error: content_blocked
+                message: "This article tripped Azure OpenAI's content filter. Set LLM_PROVIDER=anthropic in .env and restart."
+                provider: azure_openai
+                request_id: req_4f67f25c66c6
         "500":
           description: Internal server error or missing config
           content:
@@ -129,16 +111,10 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      description: Provision tokens via the `API_KEYS` env var on the server.
-
   schemas:
     HealthStatus:
       type: object
-      required: [ok, service, version, provider, require_auth]
+      required: [ok, service, version, provider]
       properties:
         ok: { type: boolean }
         service: { type: string }
@@ -150,8 +126,6 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ProviderName" }
           description: Providers for which the server has an env key configured.
-        require_auth: { type: boolean }
-        api_keys_loaded: { type: integer }
         cache_size: { type: integer }
 
     PageLink:
@@ -419,17 +393,11 @@ components:
           type: string
           enum:
             - invalid_request
-            - missing_auth
-            - invalid_token
             - missing_config
+            - content_blocked
             - internal_error
         message: { type: string }
         request_id: { type: string }
-
-    RateLimitedEnvelope:
-      type: object
-      required: [error, message, retry_after_ms]
-      properties:
-        error: { type: string, enum: [rate_limited] }
-        message: { type: string }
-        retry_after_ms: { type: integer }
+        provider:
+          type: string
+          description: Set on `content_blocked` errors so the caller knows which provider rejected it.

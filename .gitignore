@@ -8,3 +8,4 @@ dist/
 .vscode/
 extension/dist/
 backend/data/
+deploy.zip

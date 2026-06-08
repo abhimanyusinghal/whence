@@ -1,6 +1,12 @@
 # Claim Provenance Engine — Roadmap
 
-Last updated: 2026-04-28
+Last updated: 2026-06-08
+
+> **Direction note (2026-06-08):** simplified to a self-hosted, clone-and-run tool.
+> The API auth, per-key rate limiting, and per-key usage metering added earlier in
+> Phase 1 were **removed** — anyone can clone, supply their own provider keys
+> (LLM + at least one search provider) via `.env` or per-request BYOK, and use it.
+> Structured chain/request logging stays (it's the provenance-graph foundation).
 
 This product traces claims in articles back to their primary sources. It does not say "true/false"; it shows the chain of custody.
 
@@ -73,14 +79,14 @@ The strategy: hold the no-verdict line. The engine sells because it shows where 
 - [ ] Author-surname-match rule in `classify_chain.md`
 - [ ] Tie-break heuristic for "wrong primary among plausible candidates": prefer official > peer-reviewed > government > major outlet > blog. Log when ties occur.
 - [x] "False untraceable" fallback: Tavily `include_raw_content: true` retry before declaring untraceable
-- [x] API key auth on `/analyze` (bearer tokens via `API_KEYS` env, optional via `REQUIRE_AUTH`)
-- [x] Rate limiting per key (in-memory token bucket, env-tunable)
-- [x] Usage metering per key (per-call JSONL log + in-memory rolling counters)
+- [~] API key auth on `/analyze` — shipped then **removed** 2026-06-08 (self-host simplicity)
+- [~] Rate limiting per key — shipped then **removed** 2026-06-08 (self-host simplicity)
+- [~] Usage metering per key — shipped then **removed** 2026-06-08 (self-host simplicity)
 - [x] `/v1/analyze` versioned endpoint with stable JSON contract (legacy `/analyze` aliased for back-compat)
 - [x] OpenAPI 3.1 spec at `backend/openapi.yaml`, served live at `/openapi.yaml` and `/v1/openapi.yaml`
 - [x] One-page API documentation at `Docs/API.md` (curl examples, response schema, six states explained)
 - [ ] Host on Azure
-- [ ] Bound default keys + BYOK override (BYOK for the extension; hosted keys for paying API customers)
+- [x] BYOK override — per-request `search_options.byok` and the extension Options page let users supply their own search-provider keys (overriding the server's env keys)
 - [x] Extension: capture canonicalUrl, author, publishedDate, accessedAt, htmlHash; pass through to /v1/analyze
 - [x] Prompt-injection hardening: wrap page_text in `<untrusted_page_content>`, strip script/hidden DOM, add treat-as-data instruction
 - [x] Numeric `source_quality_score` (0–1) on `ProvenanceNode`; feed the existing tie-break heuristic

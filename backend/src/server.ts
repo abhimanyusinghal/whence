@@ -9,14 +9,10 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import { analyze } from "./orchestrator.js";
 import { analyzeCache, analyzeCacheKey } from "./cache.js";
-import { authMiddleware } from "./auth.js";
-import { rateLimitMiddleware } from "./rate_limit.js";
-import { appendUsage, bumpUsage } from "./usage.js";
 import { logEntry, makeRequestId } from "./logger.js";
+import { TRY_PAGE_HTML } from "./try_page.js";
 import type { EnvKeys } from "./search/index.js";
 import type { AnalyzeRequest, ProviderName, SearchOptions } from "./types.js";
-
-const REQUIRE_AUTH = (process.env.REQUIRE_AUTH ?? "false").toLowerCase() === "true";
 
 const VALID_PROVIDERS: readonly ProviderName[] = [
   "tavily",
@@ -66,6 +62,31 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
+app.get("/", (_req: Request, res: Response) => {
+  res.redirect(302, "/try");
+});
+
+app.get("/docs", async (_req: Request, res: Response) => {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Provenance API — Reference</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<redoc spec-url="/v1/openapi.yaml" hide-loading></redoc>
+<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>`;
+  res.type("html").send(html);
+});
+
+app.get("/try", async (_req: Request, res: Response) => {
+  res.type("html").send(TRY_PAGE_HTML);
+});
+
 app.get("/healthz", (_req: Request, res: Response) => {
   const env = loadEnvKeys();
   res.json({
@@ -76,8 +97,6 @@ app.get("/healthz", (_req: Request, res: Response) => {
     has_anthropic_key: Boolean(process.env.ANTHROPIC_API_KEY),
     has_azure_key: Boolean(process.env.AZURE_OPENAI_API_KEY),
     search_providers_configured: configuredProviders(env),
-    require_auth: REQUIRE_AUTH,
-    api_keys_loaded: (process.env.API_KEYS ?? "").split(",").filter((s) => s.includes(":")).length,
     cache_size: analyzeCache.size,
   });
 });
@@ -182,7 +201,6 @@ app.get(["/openapi.yaml", "/v1/openapi.yaml"], async (_req: Request, res: Respon
 const analyzeHandler = async (req: Request, res: Response, next: NextFunction) => {
     const requestId = makeRequestId();
     res.setHeader("X-Request-Id", requestId);
-    const principal = req.principal ?? { name: "anonymous", is_anonymous: true };
 
     try {
       const t0 = Date.now();
@@ -241,28 +259,6 @@ const analyzeHandler = async (req: Request, res: Response, next: NextFunction) =
           status_counts: statusCounts(cached.chains),
           error: null,
         });
-        const usageRecord = {
-          ts: new Date().toISOString(),
-          request_id: requestId,
-          principal: principal.name,
-          is_anonymous: principal.is_anonymous,
-          url: validated.url,
-          cache_hit: true,
-          claim_count: cached.claims.length,
-          total_ms: totalMs,
-          total_tokens: 0,
-          search_queries: 0,
-          fallback_uses: 0,
-          status: "ok" as const,
-          error: null,
-        };
-        bumpUsage(principal.name, {
-          total_tokens: 0,
-          total_searches: 0,
-          cache_hit: true,
-          fallback_uses: 0,
-        });
-        appendUsage(usageRecord).catch(() => void 0);
         res.json(cached);
         return;
       }
@@ -288,39 +284,47 @@ const analyzeHandler = async (req: Request, res: Response, next: NextFunction) =
         error: null,
       });
 
-      bumpUsage(principal.name, {
-        total_tokens: result.meta.tokens_used,
-        total_searches: result.meta.search_queries,
-        cache_hit: false,
-        fallback_uses: result.fallback_uses,
-      });
-      appendUsage({
-        ts: new Date().toISOString(),
-        request_id: requestId,
-        principal: principal.name,
-        is_anonymous: principal.is_anonymous,
-        url: validated.url,
-        cache_hit: false,
-        claim_count: result.claims.length,
-        total_ms: result.meta.ms,
-        total_tokens: result.meta.tokens_used,
-        search_queries: result.meta.search_queries,
-        fallback_uses: result.fallback_uses,
-        status: "ok",
-        error: null,
-      }).catch(() => void 0);
-
       res.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+
+      // Azure OpenAI's content filter rejects political / violence / news
+      // content routinely. The OpenAI SDK surfaces it as `code: "content_filter"`
+      // on the error object; Anthropic uses different signals. Detect both
+      // and return a clean 422 with an actionable message instead of bubbling
+      // up as a generic 500 with a stacktrace.
+      const errAny = err as { code?: string; status?: number; message?: string };
+      const isContentFilter =
+        errAny?.code === "content_filter" ||
+        (typeof errAny?.message === "string" &&
+          /content management policy|content_filter|content[_ ]filter/i.test(errAny.message));
+
+      if (isContentFilter) {
+        const provider = process.env.LLM_PROVIDER ?? "anthropic";
+        // Log the underlying provider error for our own debugging — keep the
+        // public message generic and actionable.
+        console.warn(
+          `[content_filter] provider=${provider} request_id=${requestId} reason=${msg.slice(0, 300)}`,
+        );
+        res.status(422).json({
+          error: "content_blocked",
+          message:
+            "The AI provider's safety filter blocked this article. This often happens with medical, political, or news content. Try a different article.",
+          request_id: requestId,
+        });
+        return;
+      }
+
       logEntry({
         type: "request",
         ts: new Date().toISOString(),
         request_id: requestId,
         url: (req.body as { url?: string })?.url ?? "",
         title: (req.body as { title?: string })?.title ?? "",
-        page_text_len: 0,
-        page_links_count: 0,
+        page_text_len: (req.body as { page_text?: string })?.page_text?.length ?? 0,
+        page_links_count: Array.isArray((req.body as { page_links?: unknown[] })?.page_links)
+          ? (req.body as { page_links: unknown[] }).page_links.length
+          : 0,
         cache_hit: false,
         claim_count: 0,
         total_ms: 0,
@@ -329,42 +333,17 @@ const analyzeHandler = async (req: Request, res: Response, next: NextFunction) =
         status_counts: {},
         error: msg.slice(0, 500),
       });
-      appendUsage({
-        ts: new Date().toISOString(),
-        request_id: requestId,
-        principal: principal.name,
-        is_anonymous: principal.is_anonymous,
-        url: (req.body as { url?: string })?.url ?? "",
-        cache_hit: false,
-        claim_count: 0,
-        total_ms: 0,
-        total_tokens: 0,
-        search_queries: 0,
-        fallback_uses: 0,
-        status: "error",
-        error: msg.slice(0, 500),
-      }).catch(() => void 0);
       next(err);
     }
   };
 
 // Mount the same handler at the legacy and versioned paths.
 // `/analyze`     — back-compat for the Chrome extension and informal callers.
-// `/v1/analyze`  — the contract-stable customer endpoint. Future breaking
-//                  changes go in `/v2/`; this URL's response shape is pinned
-//                  by the OpenAPI spec.
-app.post(
-  "/analyze",
-  authMiddleware({ required: REQUIRE_AUTH }),
-  rateLimitMiddleware,
-  analyzeHandler,
-);
-app.post(
-  "/v1/analyze",
-  authMiddleware({ required: REQUIRE_AUTH }),
-  rateLimitMiddleware,
-  analyzeHandler,
-);
+// `/v1/analyze`  — the contract-stable endpoint. Future breaking changes go in
+//                  `/v2/`; this URL's response shape is pinned by the OpenAPI spec.
+// No auth: provide your own provider keys via .env (or per-request BYOK) and call it.
+app.post("/analyze", analyzeHandler);
+app.post("/v1/analyze", analyzeHandler);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[server] unhandled error:", err);
