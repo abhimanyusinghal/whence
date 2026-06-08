@@ -16,16 +16,14 @@ servers:
   - url: https://api.claim-provenance.example
     description: Production (placeholder — real URL TBD with hosted deploy)
 
-security:
-  - BearerAuth: []
-  - {} # empty = anonymous allowed when REQUIRE_AUTH=false
+# No authentication. Self-host the backend, supply your own provider keys via
+# .env (or per-request BYOK in search_options), and call it directly.
 
 paths:
   /healthz:
     get:
       summary: Health check
-      description: Returns service status, provider config, and feature flags. Unauthenticated.
-      security: [] # explicitly no auth
+      description: Returns service status and provider config.
       responses:
         "200":
           description: Service is up
@@ -76,12 +74,6 @@ paths:
             X-Cache:
               schema: { type: string, enum: [hit, miss] }
               description: Whether the response was served from the in-memory result cache.
-            X-RateLimit-Limit:
-              schema: { type: integer }
-              description: Burst cap (requests).
-            X-RateLimit-Remaining:
-              schema: { type: integer }
-              description: Tokens remaining in your bucket.
           content:
             application/json:
               schema:
@@ -96,31 +88,21 @@ paths:
                 error: invalid_request
                 message: page_text is required and must be non-empty
                 request_id: req_abc123
-        "401":
-          description: Missing or invalid bearer token
+        "422":
+          description: |
+            Content rejected by the LLM provider's safety filter (e.g. Azure
+            OpenAI content management policy). The article itself is not
+            invalid, but the model refused to process it. Switch
+            `LLM_PROVIDER` or change articles.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-              examples:
-                missing:
-                  value:
-                    error: missing_auth
-                    message: "Authorization: Bearer <token> required"
-                invalid:
-                  value:
-                    error: invalid_token
-                    message: Invalid bearer token
-        "429":
-          description: Rate limit exceeded for this principal
-          headers:
-            Retry-After:
-              schema: { type: integer }
-              description: Seconds until at least one token is available.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateLimitedEnvelope"
+              example:
+                error: content_blocked
+                message: "This article tripped Azure OpenAI's content filter. Set LLM_PROVIDER=anthropic in .env and restart."
+                provider: azure_openai
+                request_id: req_4f67f25c66c6
         "500":
           description: Internal server error or missing config
           content:
@@ -129,16 +111,10 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      description: Provision tokens via the `API_KEYS` env var on the server.
-
   schemas:
     HealthStatus:
       type: object
-      required: [ok, service, version, provider, require_auth]
+      required: [ok, service, version, provider]
       properties:
         ok: { type: boolean }
         service: { type: string }
@@ -146,9 +122,10 @@ components:
         provider: { type: string, enum: [anthropic, azure_openai] }
         has_anthropic_key: { type: boolean }
         has_azure_key: { type: boolean }
-        has_tavily_key: { type: boolean }
-        require_auth: { type: boolean }
-        api_keys_loaded: { type: integer }
+        search_providers_configured:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderName" }
+          description: Providers for which the server has an env key configured.
         cache_size: { type: integer }
 
     PageLink:
@@ -167,6 +144,72 @@ components:
           description: |
             Sentence containing the link, or ~600 characters around it. Used by
             the classifier to associate links with claims.
+
+    ProviderName:
+      type: string
+      enum: [tavily, brave, serper, google_pse, bing]
+
+    SearchOptions:
+      type: object
+      description: |
+        Per-request override for which web-search providers to use, with
+        optional BYOK keys. When omitted, the server uses every provider it
+        has an env key for. When `providers` is supplied, only that subset
+        runs; any provider in the list with neither an env key nor a BYOK
+        key is reported as skipped in `meta.search_providers_skipped`.
+
+        All enabled providers run in parallel within each claim, so total
+        latency is dominated by the slowest provider, not the sum. Adding
+        providers does cost rate-limit budget (one query per provider per
+        claim) and increases the chance of partial failures the aggregator
+        has to absorb.
+      properties:
+        providers:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderName" }
+          description: Subset of providers to use for this request.
+        byok:
+          type: object
+          description: User-supplied API keys, override env keys for the listed provider(s).
+          properties:
+            tavily: { type: string }
+            brave: { type: string }
+            serper: { type: string }
+            bing: { type: string }
+            google_pse:
+              type: object
+              required: [key, cx]
+              properties:
+                key: { type: string, description: Google Cloud API key. }
+                cx: { type: string, description: Programmable Search Engine id. }
+
+    PageProvenance:
+      type: object
+      description: |
+        Provenance metadata captured at extraction time. All fields optional —
+        older clients may omit the entire object. When present, it is logged
+        with every chain so a later audit can prove what the user actually saw,
+        even if the source page changes.
+      properties:
+        canonical_url:
+          type: string
+          format: uri
+          description: "`<link rel=\"canonical\">` if the page declared one."
+        author:
+          type: string
+          description: Best-effort author from `meta` tags or JSON-LD.
+        published_date:
+          type: string
+          description: Publication date when discoverable (ISO 8601 preferred).
+        accessed_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp at the moment the extension extracted the page.
+        html_hash:
+          type: string
+          description: |
+            Hex-encoded SHA-256 of `documentElement.outerHTML` at extraction
+            time. Lets a future re-fetch detect whether the page changed.
 
     AnalyzeRequest:
       type: object
@@ -188,6 +231,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PageLink" }
           description: All hyperlinks on the page with their anchor + surrounding text.
+        provenance:
+          $ref: "#/components/schemas/PageProvenance"
+        search_options:
+          $ref: "#/components/schemas/SearchOptions"
 
     Claim:
       type: object
@@ -210,9 +257,8 @@ components:
           enum: [1, 2, 3]
           description: 1 = central to thesis, 2 = supporting, 3 = peripheral.
         inline_link:
-          type: string
+          type: [string, "null"]
           format: uri
-          nullable: true
           description: URL the article hyperlinks near this claim, if any.
 
     ProvenanceStatus:
@@ -231,21 +277,46 @@ components:
 
     ProvenanceNode:
       type: object
-      required: [url, title, publisher, type, links_to_upstream, snippet]
+      required:
+        - url
+        - title
+        - publisher
+        - type
+        - links_to_upstream
+        - snippet
+        - evidence_quote
+        - source_quality_score
       properties:
         url: { type: string, format: uri }
         title: { type: string }
         publisher: { type: string }
         published_date:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: ISO 8601 date when known.
         type: { $ref: "#/components/schemas/SourceType" }
         links_to_upstream:
           type: array
           items: { type: string, format: uri }
           description: URLs (within the candidate set) that this node cites for THIS claim.
-        snippet: { type: string }
+        snippet:
+          type: string
+          description: Raw Tavily content blob — may be a 1–2 sentence teaser. Use `evidence_quote` for the verbatim span the chain decision relies on.
+        evidence_quote:
+          type: string
+          description: |
+            Verbatim span copied from this node's snippet that anchors the chain
+            decision. Empty string when the node carries no support for the claim
+            (e.g. the article-itself node, or a stale/distorted candidate).
+        source_quality_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: |
+            0..1 quality signal. Tie-breaker between candidates and
+            sortable downstream. Rubric is in the system prompt; baselines run
+            from `1.0` (gov agencies / peer-reviewed / regulatory) down to
+            `0.2` (social/forum). Penalties apply for missing date, missing
+            author, or snippet that doesn't actually support the claim.
 
     ProvenanceChain:
       type: object
@@ -273,8 +344,24 @@ components:
       required: [tokens_used, search_queries, ms]
       properties:
         tokens_used: { type: integer }
-        search_queries: { type: integer }
+        search_queries:
+          type: integer
+          description: |
+            Total search calls fanned out across providers. With multiple
+            providers enabled this is roughly `claims × providers + retries`.
         ms: { type: integer, description: Wall-clock time for the full pipeline. }
+        search_providers_used:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderName" }
+          description: Distinct providers that returned at least one result.
+        search_provider_errors:
+          type: object
+          additionalProperties: { type: string }
+          description: Provider name → most recent error message seen across this analysis.
+        search_providers_skipped:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderName" }
+          description: Providers that were requested but had no env or BYOK key available.
 
     AnalyzeResponse:
       type: object
@@ -306,17 +393,11 @@ components:
           type: string
           enum:
             - invalid_request
-            - missing_auth
-            - invalid_token
             - missing_config
+            - content_blocked
             - internal_error
         message: { type: string }
         request_id: { type: string }
-
-    RateLimitedEnvelope:
-      type: object
-      required: [error, message, retry_after_ms]
-      properties:
-        error: { type: string, enum: [rate_limited] }
-        message: { type: string }
-        retry_after_ms: { type: integer }
+        provider:
+          type: string
+          description: Set on `content_blocked` errors so the caller knows which provider rejected it.

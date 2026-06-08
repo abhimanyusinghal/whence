@@ -13,8 +13,8 @@ const watch = process.argv.includes("--watch");
 const esbuildOptions = {
   entryPoints: [
     path.join(SRC, "service_worker.ts"),
-    path.join(SRC, "popup.ts"),
     path.join(SRC, "sidepanel.ts"),
+    path.join(SRC, "options.ts"),
   ],
   bundle: true,
   format: "iife",
@@ -26,8 +26,8 @@ const esbuildOptions = {
 
 async function copyStatic() {
   await fs.copyFile(path.join(ROOT, "manifest.json"), path.join(DIST, "manifest.json"));
-  await fs.copyFile(path.join(SRC, "popup.html"), path.join(DIST, "popup.html"));
   await fs.copyFile(path.join(SRC, "sidepanel.html"), path.join(DIST, "sidepanel.html"));
+  await fs.copyFile(path.join(SRC, "options.html"), path.join(DIST, "options.html"));
   await generateIcons(path.join(DIST, "icons"));
 }
 

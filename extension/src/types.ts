@@ -26,6 +26,8 @@ export type ProvenanceNode = {
   type: SourceType;
   links_to_upstream: string[];
   snippet: string;
+  evidence_quote: string;
+  source_quality_score: number;
 };
 
 export type ProvenanceStatus =
@@ -50,17 +52,45 @@ export type PageLink = {
   near_text: string;
 };
 
+export type PageProvenance = {
+  canonical_url?: string;
+  author?: string;
+  published_date?: string;
+  accessed_at?: string;
+  html_hash?: string;
+};
+
+export type ProviderName = "tavily" | "brave" | "serper" | "google_pse" | "bing";
+
+export type ProviderCredentials = {
+  tavily?: string;
+  brave?: string;
+  serper?: string;
+  google_pse?: { key: string; cx: string };
+  bing?: string;
+};
+
+export type SearchOptions = {
+  providers?: ProviderName[];
+  byok?: ProviderCredentials;
+};
+
 export type AnalyzeRequest = {
   url: string;
   title: string;
   page_text: string;
   page_links: PageLink[];
+  provenance?: PageProvenance;
+  search_options?: SearchOptions;
 };
 
 export type AnalyzeMeta = {
   tokens_used: number;
   search_queries: number;
   ms: number;
+  search_providers_used?: ProviderName[];
+  search_provider_errors?: Record<string, string>;
+  search_providers_skipped?: ProviderName[];
 };
 
 export type AnalyzeResponse = {
@@ -69,16 +99,39 @@ export type AnalyzeResponse = {
   meta: AnalyzeMeta;
 };
 
-// Internal extension messages
-export type AnalyzeMessage = { type: "ANALYZE" };
-export type AnalyzeStartedMessage = { type: "ANALYSIS_STARTED"; tabId: number };
+// Internal extension messages.
+//
+// Every analyze flow carries a `requestId` end-to-end. The side panel
+// generates it on click, the service worker echoes it through the
+// STARTED / RESULT / ERROR replies, and the panel only applies a result
+// if it matches the tab's currently-tracked running requestId. This is
+// what prevents a stale, late-arriving result from overwriting a newer
+// one when the user re-analyzes (or when concurrent runs overlap).
+export type AnalyzeMessage = {
+  type: "ANALYZE";
+  requestId: string;
+  searchOptions?: SearchOptions;
+};
+export type AnalyzeStartedMessage = {
+  type: "ANALYSIS_STARTED";
+  tabId: number;
+  requestId: string;
+  pageUrl: string;
+};
 export type AnalyzeResultMessage = {
   type: "ANALYSIS_RESULT";
   tabId: number;
+  requestId: string;
+  pageUrl: string;
   data: AnalyzeResponse;
   highlight_stats?: { matched: number; total: number };
 };
-export type AnalyzeErrorMessage = { type: "ANALYSIS_ERROR"; error: string };
+export type AnalyzeErrorMessage = {
+  type: "ANALYSIS_ERROR";
+  error: string;
+  tabId?: number;
+  requestId?: string;
+};
 export type FocusHighlightMessage = { type: "FOCUS_HIGHLIGHT"; claim_id: string };
 export type FocusClaimMessage = { type: "FOCUS_CLAIM"; claim_id: string };
 export type ExtensionMessage =

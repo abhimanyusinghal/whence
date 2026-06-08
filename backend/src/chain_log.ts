@@ -1,17 +1,25 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { Claim, ProvenanceChain } from "./types.js";
+import { appendBlobLine, blobLoggingEnabled } from "./blob_log.js";
+import type { Claim, PageProvenance, ProvenanceChain } from "./types.js";
 
 /**
  * One record per claim, denormalized so each line is self-sufficient when
  * we later parse it into a graph database. URL + title travel with every
  * record so we don't need a separate "request" table to reconstruct context.
+ *
+ * `page_provenance` carries the metadata the extension captured at extraction
+ * time (canonical URL, author, published date, accessed_at, html_hash). It's
+ * optional — older clients may not send it — but when present it travels into
+ * the log so a later graph query can prove "what the user actually saw" for
+ * any claim, even after the source page changes.
  */
 export type ChainLogRecord = {
   ts: string;
   request_id: string;
   url: string;
   title: string;
+  page_provenance?: PageProvenance;
   claim: Claim;
   chain: ProvenanceChain;
   model: string;
@@ -64,6 +72,11 @@ async function ensureDir(filePath: string): Promise<boolean> {
  * the same guarantee for files opened with FILE_APPEND_DATA.
  */
 export async function appendChainRecord(record: ChainLogRecord): Promise<void> {
+  if (blobLoggingEnabled()) {
+    await appendBlobLine("chains", JSON.stringify(record));
+    return;
+  }
+
   const filePath = getLogPath();
   if (!filePath) return;
 

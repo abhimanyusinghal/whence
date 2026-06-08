@@ -16,17 +16,43 @@
 | `circular` | Chain loops without reaching a primary. `hop_count = -1`. |
 | `untraceable` | No primary surfaces. Likely assertion, opinion, or fabrication. `hop_count = -1`. |
 
+## Search providers
+
+The backend uses a multi-provider web-search aggregator: every enabled provider runs in parallel within each claim, results are deduplicated by canonical URL, and cross-provider corroboration boosts a candidate's rank. Five providers are supported:
+
+| Provider | Free tier (typical) | Env keys |
+|---|---|---|
+| Tavily | 1,000 searches/mo | `TAVILY_API_KEY` |
+| Brave Search | 2,000 queries/mo | `BRAVE_API_KEY` |
+| Serper.dev | 2,500 one-time credits, then paid | `SERPER_API_KEY` |
+| Google PSE | 100 queries/day per CSE | `GOOGLE_PSE_KEY`, `GOOGLE_PSE_CX` |
+| Bing Web Search | 1,000 queries/mo | `BING_API_KEY` |
+
+If any provider key is set in the server env, it's part of the public default. Callers can override per-request via `search_options`:
+
+```json
+{
+  "url": "...",
+  "title": "...",
+  "page_text": "...",
+  "page_links": [],
+  "search_options": {
+    "providers": ["brave", "serper"],
+    "byok": {
+      "brave": "BSAxxxxxxxxx",
+      "google_pse": { "key": "AIza...", "cx": "0123:abcd" }
+    }
+  }
+}
+```
+
+If `providers` is supplied, only those run; anything in the list without a usable key (env or BYOK) is reported in `meta.search_providers_skipped`. If no provider is usable for the request, the server returns 500 `missing_config`.
+
+> All enabled providers fan out in parallel inside each claim, so adding a provider adds the slower of the two (not the sum) to per-claim latency. The cost is the providers' own free-tier budgets: every provider gets one query per claim per analysis (plus a Tavily-only retry for false-untraceable cases).
+
 ## Authentication
 
-Bearer tokens. Provision them with the `API_KEYS` env on the server: `API_KEYS=tok_alpha:partner_a,tok_beta:partner_b`. The string before the colon is the secret; after the colon is the public name surfaced in logs and rate-limit buckets.
-
-```
-Authorization: Bearer tok_alpha
-```
-
-When `REQUIRE_AUTH=false` (default), unauthenticated calls are allowed and attributed to the `anonymous` principal. Set `REQUIRE_AUTH=true` in production.
-
-`/healthz` is intentionally unauthenticated so probes and load balancers work without keys.
+None. This is a self-hosted tool — run the backend with your own provider keys (LLM + at least one search provider) in `.env`, or supply per-request keys via `search_options.byok`, and call `/v1/analyze` directly. There is no login, no API key, and no per-caller metering.
 
 ## POST `/v1/analyze`
 
@@ -43,11 +69,18 @@ When `REQUIRE_AUTH=false` (default), unauthenticated calls are allowed and attri
       "anchor_text": "U.S. Bureau of Labor Statistics",
       "near_text": "According to the U.S. Bureau of Labor Statistics, 27 percent..."
     }
-  ]
+  ],
+  "provenance": {
+    "canonical_url": "https://example.com/article",
+    "author": "Jane Doe",
+    "published_date": "2026-04-12T08:30:00Z",
+    "accessed_at": "2026-04-30T14:22:18Z",
+    "html_hash": "f4a3...c91b"
+  }
 }
 ```
 
-All four top-level fields are required. `page_links[]` may be empty but must be present.
+`url`, `title`, `page_text`, and `page_links` are required. `page_links[]` may be empty but must be present. `provenance` is optional — older clients may omit it; the Chrome extension started sending it in Phase 1 so a later audit can prove what the user actually saw, even if the source page changes. Every field inside `provenance` is independently optional.
 
 ### Response (200)
 
@@ -76,7 +109,9 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
           "publisher": "example.com",
           "type": "secondary",
           "links_to_upstream": ["https://www.bls.gov/news.release/atus.t05.htm"],
-          "snippet": "..."
+          "snippet": "...",
+          "evidence_quote": "",
+          "source_quality_score": 0.5
         },
         {
           "url": "https://www.bls.gov/news.release/atus.t05.htm",
@@ -84,7 +119,9 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
           "publisher": "bls.gov",
           "type": "primary",
           "links_to_upstream": [],
-          "snippet": "..."
+          "snippet": "Average hours per day spent working at home, 2023 annual averages...",
+          "evidence_quote": "27 percent of employed persons did some or all of their work at home",
+          "source_quality_score": 1.0
         }
       ],
       "notes": "Article links directly to a primary BLS source."
@@ -92,8 +129,11 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
   ],
   "meta": {
     "tokens_used": 7081,
-    "search_queries": 1,
-    "ms": 14500
+    "search_queries": 3,
+    "ms": 14500,
+    "search_providers_used": ["tavily", "brave", "serper"],
+    "search_providers_skipped": ["google_pse"],
+    "search_provider_errors": { "bing": "bing 429: throttled" }
   },
   "fallback_uses": 0
 }
@@ -107,20 +147,6 @@ All four top-level fields are required. `page_links[]` may be empty but must be 
 |---|---|
 | `X-Request-Id` | Same as `request_id` in the body. Quote when reporting issues. |
 | `X-Cache` | `hit` or `miss`. Cache key is `sha256(url + page_text)`; LRU 50 entries. |
-| `X-RateLimit-Limit` | Burst cap for your principal. |
-| `X-RateLimit-Remaining` | Tokens left in your bucket. |
-
-### Rate limiting
-
-Per-principal token bucket. Refills at `RATE_LIMIT_PER_MINUTE` (default 60) requests/minute, capped at `RATE_LIMIT_BURST` (default 30). When exhausted you get **429** with `Retry-After` (seconds) and a JSON body:
-
-```json
-{
-  "error": "rate_limited",
-  "message": "Rate limit exceeded for principal \"partner_a\". Retry in 3s.",
-  "retry_after_ms": 3000
-}
-```
 
 ### Error envelope
 
@@ -137,27 +163,15 @@ All non-200 responses match:
 | Status | `error` values |
 |---|---|
 | 400 | `invalid_request` |
-| 401 | `missing_auth`, `invalid_token` |
-| 429 | `rate_limited` |
+| 422 | `content_blocked` (LLM provider's safety filter rejected the article) |
 | 500 | `missing_config`, `internal_error` |
 
 ## curl example
-
-Cold call (no token, REQUIRE_AUTH=false):
 
 ```sh
 curl -X POST http://localhost:8787/v1/analyze \
   -H 'Content-Type: application/json' \
   -d @article.json | jq '.chains[] | {status, hop_count, primary: .nodes[-1].url}'
-```
-
-With auth:
-
-```sh
-curl -X POST http://localhost:8787/v1/analyze \
-  -H 'Authorization: Bearer tok_alpha' \
-  -H 'Content-Type: application/json' \
-  -d @article.json
 ```
 
 ## GET `/healthz`
@@ -170,14 +184,12 @@ curl -X POST http://localhost:8787/v1/analyze \
   "provider": "azure_openai",
   "has_anthropic_key": true,
   "has_azure_key": true,
-  "has_tavily_key": true,
-  "require_auth": false,
-  "api_keys_loaded": 2,
+  "search_providers_configured": ["tavily", "brave"],
   "cache_size": 0
 }
 ```
 
-Unauthenticated. Useful for health probes and ops debugging — `api_keys_loaded` confirms the env was parsed without leaking the tokens.
+Useful for health probes and ops debugging — `search_providers_configured` confirms which search providers the server found keys for.
 
 ## Versioning
 

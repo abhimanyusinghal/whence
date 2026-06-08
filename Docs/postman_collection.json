@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Claim Provenance API",
-    "description": "Manual test collection for the /v1/analyze endpoint.\n\n## Setup\n\n1. Import this file into Postman (File → Import → drag `postman_collection.json`).\n2. Open the collection's **Variables** tab and set:\n   - `baseUrl` — e.g. `http://localhost:8787` for local dev.\n   - `bearerToken` — leave empty if backend has `REQUIRE_AUTH=false` and you want to test the anonymous path. Set to one of your `API_KEYS` tokens otherwise.\n3. Make sure the backend is running (`cd backend && npm run start`).\n4. Run requests individually, or use the **Run collection** button to execute the whole suite end-to-end.\n\nThe collection includes assertions on each request — open the **Test Results** tab after running to see what passed/failed.\n\n## See also\n\n- [`Docs/API.md`](API.md) — prose reference\n- [`backend/openapi.yaml`](../backend/openapi.yaml) — machine-readable spec\n",
+    "description": "Manual test collection for the /v1/analyze endpoint.\n\n## Setup\n\n1. Import this file into Postman (File → Import → drag `postman_collection.json`).\n2. Open the collection's **Variables** tab and set:\n   - `baseUrl` — e.g. `http://localhost:8787` for local dev.\n3. Make sure the backend is running with your provider keys in `.env` (`cd backend && npm run start`). No auth — there is no login or bearer token.\n4. Run requests individually, or use the **Run collection** button to execute the whole suite end-to-end.\n\nThe collection includes assertions on each request — open the **Test Results** tab after running to see what passed/failed.\n\n## See also\n\n- [`Docs/API.md`](API.md) — prose reference\n- [`backend/openapi.yaml`](../backend/openapi.yaml) — machine-readable spec\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -9,24 +9,8 @@
       "key": "baseUrl",
       "value": "http://localhost:8787",
       "type": "string"
-    },
-    {
-      "key": "bearerToken",
-      "value": "",
-      "type": "string",
-      "description": "Leave empty to call as the anonymous principal (only works when REQUIRE_AUTH=false). Otherwise set to one of the tokens declared in API_KEYS."
     }
   ],
-  "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{bearerToken}}",
-        "type": "string"
-      }
-    ]
-  },
   "item": [
     {
       "name": "Health & discovery",
@@ -34,7 +18,6 @@
         {
           "name": "GET /healthz",
           "request": {
-            "auth": { "type": "noauth" },
             "method": "GET",
             "header": [],
             "url": {
@@ -42,7 +25,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["healthz"]
             },
-            "description": "Unauthenticated probe. Reports provider, key presence, auth posture, and cache size."
+            "description": "Probe. Reports provider, key presence, configured search providers, and cache size."
           },
           "event": [
             {
@@ -54,8 +37,7 @@
                   "const j = pm.response.json();",
                   "pm.test('Has ok=true', () => pm.expect(j.ok).to.equal(true));",
                   "pm.test('Reports provider', () => pm.expect(j.provider).to.be.oneOf(['anthropic', 'azure_openai']));",
-                  "pm.test('Reports require_auth', () => pm.expect(j).to.have.property('require_auth'));",
-                  "pm.test('Reports api_keys_loaded', () => pm.expect(j.api_keys_loaded).to.be.a('number'));"
+                  "pm.test('Reports configured search providers', () => pm.expect(j.search_providers_configured).to.be.an('array'));"
                 ]
               }
             }
@@ -64,7 +46,6 @@
         {
           "name": "GET /v1/openapi.yaml",
           "request": {
-            "auth": { "type": "noauth" },
             "method": "GET",
             "header": [],
             "url": {
@@ -120,10 +101,6 @@
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "pm.test('X-Request-Id header present', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.match(/^req_/));",
                   "pm.test('X-Cache: miss on first call', () => pm.expect(pm.response.headers.get('X-Cache')).to.equal('miss'));",
-                  "pm.test('X-RateLimit headers present', () => {",
-                  "  pm.expect(pm.response.headers.get('X-RateLimit-Limit')).to.be.a('string');",
-                  "  pm.expect(pm.response.headers.get('X-RateLimit-Remaining')).to.be.a('string');",
-                  "});",
                   "const j = pm.response.json();",
                   "pm.test('Response shape matches AnalyzeResponse', () => {",
                   "  pm.expect(j).to.have.property('claims').that.is.an('array');",
@@ -265,103 +242,6 @@
                   "pm.test('error: invalid_request', () => pm.expect(j.error).to.equal('invalid_request'));",
                   "pm.test('Message names the missing field', () => pm.expect(j.message).to.match(/page_text/));",
                   "pm.test('Includes request_id for support', () => pm.expect(j.request_id).to.match(/^req_/));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "401 — invalid bearer token",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                { "key": "token", "value": "definitely_not_a_real_token", "type": "string" }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"url\": \"https://example.com/x\",\n  \"title\": \"x\",\n  \"page_text\": \"x\",\n  \"page_links\": []\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/v1/analyze",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1", "analyze"]
-            },
-            "description": "Sends a bogus bearer token. Expect 401 `invalid_token` regardless of the server's REQUIRE_AUTH setting (a present-but-wrong token is always rejected)."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
-                  "const j = pm.response.json();",
-                  "pm.test('error: invalid_token', () => pm.expect(j.error).to.equal('invalid_token'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "401 — missing auth (only fires when REQUIRE_AUTH=true)",
-          "request": {
-            "auth": { "type": "noauth" },
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"url\": \"https://example.com/x\",\n  \"title\": \"x\",\n  \"page_text\": \"x\",\n  \"page_links\": []\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/v1/analyze",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1", "analyze"]
-            },
-            "description": "No auth header. When `REQUIRE_AUTH=true` on the server: 401 `missing_auth`. When `REQUIRE_AUTH=false`: 200, attributed to the anonymous principal. The test below auto-detects which mode is active by hitting /healthz first."
-          },
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "// Probe /healthz to find out whether REQUIRE_AUTH is on, then store the answer.",
-                  "pm.sendRequest({",
-                  "  url: pm.collectionVariables.get('baseUrl') + '/healthz',",
-                  "  method: 'GET'",
-                  "}, (err, resp) => {",
-                  "  if (err) return;",
-                  "  const j = resp.json();",
-                  "  pm.collectionVariables.set('requireAuth', String(j.require_auth));",
-                  "});"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const requireAuth = pm.collectionVariables.get('requireAuth') === 'true';",
-                  "if (requireAuth) {",
-                  "  pm.test('REQUIRE_AUTH=true → 401 missing_auth', () => {",
-                  "    pm.response.to.have.status(401);",
-                  "    pm.expect(pm.response.json().error).to.equal('missing_auth');",
-                  "  });",
-                  "} else {",
-                  "  pm.test('REQUIRE_AUTH=false → 200 anonymous (or other valid status)', () => {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 429, 500]);",
-                  "  });",
-                  "  pm.test.skip('Skipped: this assertion only runs when REQUIRE_AUTH=true');",
-                  "}"
                 ]
               }
             }

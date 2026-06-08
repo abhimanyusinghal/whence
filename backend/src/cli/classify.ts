@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../.env") });
 
 import { createProvider } from "../llm/index.js";
-import { publisherFromUrl, tavilySearch, withInlineLink } from "../search.js";
+import { aggregateSearch, publisherFromUrl, withInlineLink, type EnvKeys } from "../search/index.js";
 import type { AnalyzeRequest, PageLink } from "../types.js";
 
 function htmlToText(html: string): string {
@@ -68,10 +68,15 @@ async function main() {
     page_links: extractLinks(html),
   };
 
-  const tavilyKey = process.env.TAVILY_API_KEY;
-  if (!tavilyKey) {
-    throw new Error("TAVILY_API_KEY is not set in .env");
+  const env: EnvKeys = {};
+  if (process.env.TAVILY_API_KEY) env.tavily = process.env.TAVILY_API_KEY;
+  if (process.env.BRAVE_API_KEY) env.brave = process.env.BRAVE_API_KEY;
+  if (process.env.SERPER_API_KEY) env.serper = process.env.SERPER_API_KEY;
+  if (process.env.BING_API_KEY) env.bing = process.env.BING_API_KEY;
+  if (process.env.GOOGLE_PSE_KEY && process.env.GOOGLE_PSE_CX) {
+    env.google_pse = { key: process.env.GOOGLE_PSE_KEY, cx: process.env.GOOGLE_PSE_CX };
   }
+  if (Object.keys(env).length === 0) throw new Error("No search provider keys set in env");
 
   const provider = createProvider();
 
@@ -95,16 +100,20 @@ async function main() {
   const claim = extract.claims[claimIndex];
   console.error(`[cli]   selected claim [${claimIndex}]: ${claim.text.slice(0, 120)}...`);
 
-  console.error(`[cli] step 2/3: searching Tavily for "${claim.normalized.slice(0, 80)}..."`);
+  console.error(`[cli] step 2/3: searching for "${claim.normalized.slice(0, 80)}..."`);
   const tSearch = Date.now();
-  const rawCandidates = await tavilySearch({
-    apiKey: tavilyKey,
+  const aggregated = await aggregateSearch({
     query: claim.normalized,
     maxResults: 8,
+    env,
   });
-  const candidates = withInlineLink(rawCandidates, claim.inline_link ?? null);
+  const candidates = withInlineLink(aggregated.candidates, claim.inline_link ?? null);
   console.error(
-    `[cli]   ${rawCandidates.length} from Tavily + ${candidates.length - rawCandidates.length} inline (${Date.now() - tSearch}ms)`,
+    `[cli]   ${aggregated.candidates.length} merged from [${aggregated.providersUsed.join(", ") || "none"}]` +
+      (Object.keys(aggregated.providerErrors).length
+        ? ` (errors: ${Object.entries(aggregated.providerErrors).map(([n, e]) => `${n}=${e.slice(0, 40)}`).join("; ")})`
+        : "") +
+      ` + ${candidates.length - aggregated.candidates.length} inline (${Date.now() - tSearch}ms)`,
   );
 
   console.error(`[cli] step 3/3: classifying chain...`);
