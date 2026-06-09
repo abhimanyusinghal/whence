@@ -9,10 +9,10 @@ info:
     Six states: `primary`, `direct_cited`, `indirect_cited`, `stale_cited`,
     `circular`, `untraceable`. See `Docs/API.md` for the taxonomy.
   contact:
-    url: https://github.com/abhimanyusinghal/claim
+    url: https://github.com/abhimanyusinghal/whence
   license:
     name: MIT
-    url: https://github.com/abhimanyusinghal/claim/blob/main/LICENSE
+    url: https://github.com/abhimanyusinghal/whence/blob/main/LICENSE
 servers:
   - url: http://localhost:8787
     description: Local (self-hosted) — substitute your own host if you deploy it
