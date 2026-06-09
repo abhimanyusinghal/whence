@@ -8,7 +8,7 @@ kinds are welcome — bug reports, fixes, docs, new search providers, eval data.
 Requires **Node.js 20+**.
 
 ```sh
-git clone https://github.com/abhimanyusinghal/claim
+git clone https://github.com/abhimanyusinghal/whence
 cd claim
 cp .env.example .env        # add at least one LLM key + one search-provider key
 

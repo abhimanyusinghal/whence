@@ -10,7 +10,7 @@ No accounts, no login, no API keys to provision. Clone it, drop your own provide
 ## Quick start
 
 ```sh
-git clone https://github.com/abhimanyusinghal/claim
+git clone https://github.com/abhimanyusinghal/whence
 cd claim
 cp .env.example .env        # then edit .env — see "Configure keys" below
 cd backend && npm install

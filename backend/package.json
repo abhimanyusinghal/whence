@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/abhimanyusinghal/claim.git",
+    "url": "https://github.com/abhimanyusinghal/whence.git",
     "directory": "backend"
   },
   "type": "module",

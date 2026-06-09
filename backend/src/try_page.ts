@@ -164,7 +164,7 @@ export const TRY_PAGE_HTML = `<!DOCTYPE html>
   <a href="/docs">API docs</a> ·
   <a href="/v1/openapi.yaml">OpenAPI spec</a> ·
   <a href="/healthz">Health</a> ·
-  <a href="https://github.com/abhimanyusinghal/claim" target="_blank" rel="noopener">Claim Provenance Engine</a>
+  <a href="https://github.com/abhimanyusinghal/whence" target="_blank" rel="noopener">Claim Provenance Engine</a>
 </footer>
 
 </div>

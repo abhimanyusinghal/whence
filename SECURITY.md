@@ -6,7 +6,7 @@
 
 Instead, use GitHub's private vulnerability reporting:
 **Security → Report a vulnerability** on this repository
-(<https://github.com/abhimanyusinghal/claim/security/advisories/new>).
+(<https://github.com/abhimanyusinghal/whence/security/advisories/new>).
 
 Include reproduction steps and the affected component (backend or extension). You can expect an
 acknowledgement and, where applicable, a fix or mitigation plan.
